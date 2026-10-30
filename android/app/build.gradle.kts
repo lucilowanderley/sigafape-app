@@ -1,7 +1,14 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Assinatura do .apk: android/key.properties + o arquivo .jks (nunca no GitHub).
+val keyProps = Properties().also { p ->
+    rootProject.file("key.properties").takeIf { it.exists() }?.inputStream()?.use { p.load(it) }
 }
 
 android {
@@ -29,10 +36,6 @@ android {
 
     // Assinatura do .apk: android/key.properties + o arquivo .jks (nunca no GitHub).
     // No GitHub Actions eles são criados a partir dos segredos do repositório. Sem eles, usa a chave de depuração.
-    val keyProps = java.util.Properties().apply {
-        val f = rootProject.file("key.properties")
-        if (f.exists()) f.inputStream().use { load(it) }
-    }
     signingConfigs {
         if (keyProps.isNotEmpty()) {
             create("release") {
