@@ -1,0 +1,83 @@
+name: Gerar APK
+
+# Gera o .apk do app a cada envio na main (e quando pedido em Actions → Gerar APK → Run workflow).
+# Baixe em Actions → execução mais recente → Artifacts.
+# Ao criar uma tag v1.0.0, v1.0.1... o .apk também é publicado em Releases.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      servidor:
+        description: 'Endereço do sistema já preenchido no app (opcional), ex.: https://sigafape.pmrn.internal'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # Assinatura do app: sem ela, o celular não aceita instalar uma versão nova por cima da antiga.
+      # Segredos do repositório (Settings → Secrets and variables → Actions):
+      #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_SENHA, ANDROID_KEY_ALIAS, ANDROID_KEY_SENHA
+      - name: Preparar a chave de assinatura
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_SENHA: ${{ secrets.ANDROID_KEYSTORE_SENHA }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_SENHA: ${{ secrets.ANDROID_KEY_SENHA }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::warning::Sem a chave de assinatura nos segredos: o .apk sai com a chave de depuração e não atualiza por cima de outra versão."
+            exit 0
+          fi
+          echo "$KEYSTORE" | base64 -d > android/app/sigafape.jks
+          printf 'storeFile=sigafape.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_SENHA" "$ALIAS" "$KEY_SENHA" > android/key.properties
+
+      - name: Gerar o .apk
+        run: |
+          flutter build apk --release --build-number=${{ github.run_number }} --dart-define=SERVIDOR=${{ inputs.servidor }}
+          cp build/app/outputs/flutter-apk/app-release.apk sigafape-operador-de-campo.apk
+
+      - name: Gerar o .apk de demonstração (sem servidor; senha "demo")
+        run: |
+          flutter build apk --release --build-number=${{ github.run_number }} --dart-define=DEMO=true
+          cp build/app/outputs/flutter-apk/app-release.apk sigafape-demonstracao.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigafape-apk
+          path: |
+            sigafape-operador-de-campo.apk
+            sigafape-demonstracao.apk
+
+      - name: Publicar em Releases (tags v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sigafape-operador-de-campo.apk
+            sigafape-demonstracao.apk

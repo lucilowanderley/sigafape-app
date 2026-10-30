@@ -1,0 +1,6 @@
+Certificado da CA própria da rede interna (pmrn.internal)
+
+Para o app aceitar o HTTPS do servidor interno, coloque aqui o certificado da CA
+com o nome ca.pem (formato PEM, começando com -----BEGIN CERTIFICATE-----) e gere o .apk de novo.
+O certificado da CA é público (não é a chave privada): pode ficar no repositório.
+Nunca coloque aqui a chave privada (.key) da CA.

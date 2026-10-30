@@ -1,0 +1,288 @@
+import 'package:flutter/material.dart';
+
+import '../tema.dart';
+import '../util/formato.dart';
+import '../widgets/comum.dart';
+import 'cautela.dart';
+import 'inspecoes.dart';
+
+/// Tela inicial (opção A): cartão do policial e atalhos em grade, como o "Meu painel" da web.
+class TelaPainel extends StatefulWidget {
+  const TelaPainel({super.key, required this.irPara, required this.aoAtualizar});
+  final void Function(int aba) irPara;
+  final VoidCallback aoAtualizar;
+
+  @override
+  State<TelaPainel> createState() => _TelaPainelState();
+}
+
+class _TelaPainelState extends State<TelaPainel> {
+  final _chave = GlobalKey<CarregarState<Map<String, dynamic>>>();
+
+  Future<Map<String, dynamic>> _buscar() async {
+    final r = await apiDe(context).get('painel');
+    widget.aoAtualizar();
+    return r['data'] as Map<String, dynamic>;
+  }
+
+  Future<void> _abrir(Widget tela) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => tela));
+    _chave.currentState?.recarregar();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessao = Escopo.de(context);
+    final pol = sessao.policial;
+    return Scaffold(
+      appBar: Topo(
+        titulo: Marca(unidade: pol?['unidade']?.toString() ?? sessao.usuario?['unidade']?.toString()),
+        mostrarVoltar: false,
+        acoes: [
+          IconButton(tooltip: 'Alertas', icon: const Icon(Icons.notifications_outlined), onPressed: () => widget.irPara(3)),
+        ],
+      ),
+      body: Carregar<Map<String, dynamic>>(
+        key: _chave,
+        buscar: _buscar,
+        construir: (context, d) => _conteudo(context, d),
+      ),
+    );
+  }
+
+  Widget _conteudo(BuildContext context, Map<String, dynamic> d) {
+    final c = Cores.de(context);
+    final usuario = d['usuario'] as Map<String, dynamic>? ?? {};
+    final pol = usuario['policial'] as Map<String, dynamic>?;
+    if (d['vinculado'] != true) {
+      return ListView(children: [
+        _Heroi(usuario: usuario, policial: null),
+        const Vazio('Sua conta ainda não está vinculada a um cadastro do Efetivo policial. Procure o RH ou o administrador do sistema.', icone: Icons.link_off),
+      ]);
+    }
+
+    List lista(String k) => (d[k] as List?) ?? const [];
+    final agora = d['servico_agora'] as Map<String, dynamic>?;
+    final proximo = d['proximo_servico'] as Map<String, dynamic>?;
+    final servico = agora ?? proximo;
+    final comigo = lista('comigo');
+    final pendentes = lista('recebimentos_pendentes');
+    final reservas = lista('reservas');
+    final convocacoes = lista('convocacoes_inspecao');
+    final alertas = lista('alertas_pendentes');
+    final avisos = ((d['avisos_nao_lidos'] as num?) ?? 0).toInt();
+    final diarias = d['diarias'] as Map<String, dynamic>?;
+    final viatura = d['viatura_em_uso'] as Map<String, dynamic>?;
+    final urgentes = alertas.where((a) => a['prioridade'] == 'urgente' || a['prioridade'] == 'urgentissima').length;
+
+    String servicoDetalhe(Map<String, dynamic> s) =>
+        [s['titulo'] ?? s['tipo'], s['viatura'] != null ? 'VTR ${s['viatura']}' : null].where((e) => e != null && e.toString().isNotEmpty).join(' · ');
+
+    final atalhos = <_Atalho>[
+      _Atalho(const Color(0xFF1F5FB4), Icons.calendar_month_outlined, 'MEU SERVIÇO',
+          servico == null ? 'Sem escala' : (agora != null ? 'Agora' : quandoCurto(servico['inicio'])),
+          servico == null ? '${d['servicos_no_mes'] ?? 0} no mês' : servicoDetalhe(servico),
+          () => _abrir(_TelaAgenda(dados: d))),
+      _Atalho(const Color(0xFF1D8A45), Icons.inventory_2_outlined, 'COMIGO AGORA', '${comigo.length}', comigo.length == 1 ? 'material' : 'materiais', () => widget.irPara(1)),
+      _Atalho(const Color(0xFF0F7C8C), Icons.schedule, 'RESERVAS', '${reservas.length}',
+          reservas.isEmpty ? 'nenhuma pendente' : quandoCurto(reservas.first['retirada_prevista']), () => widget.irPara(2)),
+      _Atalho(const Color(0xFFC0392B), Icons.draw_outlined, 'ASSINAR', '${pendentes.length}',
+          pendentes.isEmpty ? 'nada pendente' : 'recebimento pendente', pendentes.isEmpty ? () => widget.irPara(1) : () => _abrir(TelaCautela(id: pendentes.first['id'] as int))),
+      _Atalho(const Color(0xFFB8860B), Icons.verified_user_outlined, 'INSPEÇÃO',
+          convocacoes.isEmpty ? 'Em dia' : 'Até ${diaMes(convocacoes.first['apresentar_ate'])}',
+          convocacoes.isEmpty ? 'sem convocação' : 'apresentar ${convocacoes.first['material'] ?? 'material'}', () => _abrir(const TelaInspecoes())),
+      _Atalho(const Color(0xFFE06A17), Icons.notifications_outlined, 'ALERTAS', '${alertas.length + avisos}',
+          urgentes > 0 ? '$urgentes urgente${urgentes > 1 ? 's' : ''}' : 'para ciência', () => widget.irPara(3)),
+      if (diarias != null)
+        _Atalho(const Color(0xFF7A5BD0), Icons.sell_outlined, 'DIÁRIAS DO MÊS', '${diarias['no_mes'] ?? 0}${diarias['limite'] != null ? '/${diarias['limite']}' : ''}',
+            '${(diarias['lista'] as List?)?.length ?? 0} lançamento(s)', () => _abrir(_TelaDiarias(diarias: diarias))),
+      _Atalho(const Color(0xFF16335F), Icons.badge_outlined, 'MEUS DADOS', 'Ficha', 'consultar', () => widget.irPara(4)),
+    ];
+
+    return ListView(padding: const EdgeInsets.only(bottom: 16), children: [
+      _Heroi(usuario: usuario, policial: pol),
+      if (viatura != null)
+        Cartao(
+          bordaEsquerda: const Color(0xFF7A5BD0),
+          child: Row(children: [
+            const Icon(Icons.directions_car_outlined),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Viatura em uso: ${viatura['prefixo'] ?? ''} ${viatura['placa'] != null ? '(${viatura['placa']})' : ''} · saída ${hora(viatura['saida'])}')),
+          ]),
+        ),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: GridView.count(
+          crossAxisCount: MediaQuery.of(context).size.width > 600 ? 4 : 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 1.18,
+          children: atalhos.map((a) => _CartaoAtalho(a)).toList(),
+        ),
+      ),
+      if (lista('depositos').isNotEmpty) ...[
+        const TituloSecao('Depósitos na armaria'),
+        for (final dep in lista('depositos'))
+          Cartao(
+            child: Text('${dep['descricao'] ?? dep['tipo']} · ${dep['numero_serie'] ?? ''}\nDesde ${dataCurta(dep['depositado_em'])}${dep['retorno_previsto'] != null ? ' · retorno ${dataCurta(dep['retorno_previsto'])}' : ''}',
+                style: TextStyle(color: c.texto)),
+          ),
+      ],
+      if (lista('patrimonio').isNotEmpty) ...[
+        const TituloSecao('Patrimônio sob minha guarda'),
+        for (final p in lista('patrimonio'))
+          Cartao(child: Text('${p['nome']} · tomb. ${p['tombamento'] ?? '—'}${p['estado'] != null ? ' · ${p['estado']}' : ''}')),
+      ],
+    ]);
+  }
+}
+
+class _Heroi extends StatelessWidget {
+  const _Heroi({required this.usuario, required this.policial});
+  final Map<String, dynamic> usuario;
+  final Map<String, dynamic>? policial;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Cores.de(context);
+    final nome = policial?['nome'] ?? usuario['nome'] ?? '';
+    final externo = policial?['de_outra_unidade'] as Map<String, dynamic>?;
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: c.heroi, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(16),
+        border: Border(bottom: BorderSide(color: c.dourado, width: 4)),
+      ),
+      child: Row(children: [
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: c.dourado,
+          child: Text(usuario['iniciais']?.toString() ?? '', style: TextStyle(color: c.entrada, fontWeight: FontWeight.w900, fontSize: 18)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(saudacao(), style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text(nome.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 19)),
+            if (policial != null)
+              Text('Mat. ${policial!['matricula'] ?? '—'} · ${policial!['unidade'] ?? ''}', style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 6, runSpacing: 4, children: [
+              if (policial?['situacao'] != null) Pilula(policial!['situacao'].toString(), cor: policial!['situacao'] == 'Pronto' ? 'green' : 'gold'),
+              if (externo != null) Pilula('De ${externo['unidade_origem'] ?? 'outra unidade'} até ${dataCurta(externo['ate'])}', cor: 'blue'),
+            ]),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+class _Atalho {
+  _Atalho(this.cor, this.icone, this.rotulo, this.valor, this.detalhe, this.aoTocar);
+  final Color cor;
+  final IconData icone;
+  final String rotulo, valor, detalhe;
+  final VoidCallback aoTocar;
+}
+
+class _CartaoAtalho extends StatelessWidget {
+  const _CartaoAtalho(this.a);
+  final _Atalho a;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Cores.de(context);
+    return Material(
+      color: c.cartao,
+      elevation: c.escuro ? 0 : 1,
+      shadowColor: Colors.black12,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: a.aoTocar,
+        child: Container(
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: a.cor, width: 4))),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: a.cor.withValues(alpha: c.escuro ? .22 : .13), borderRadius: BorderRadius.circular(10)),
+              child: Icon(a.icone, color: a.cor, size: 20),
+            ),
+            const Spacer(),
+            Text(a.rotulo, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: .5, color: c.suave)),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(a.valor, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800))),
+            Text(a.detalhe, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, color: c.suave)),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Agenda de 30 dias (serviços, escalas, operações).
+class _TelaAgenda extends StatelessWidget {
+  const _TelaAgenda({required this.dados});
+  final Map<String, dynamic> dados;
+
+  @override
+  Widget build(BuildContext context) {
+    final agora = dados['servico_agora'] as Map<String, dynamic>?;
+    final agenda = (dados['agenda'] as List?) ?? const [];
+    Widget item(Map s, {bool emCurso = false}) => Cartao(
+          bordaEsquerda: emCurso ? const Color(0xFF1D8A45) : const Color(0xFF1F5FB4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${emCurso ? 'AGORA · ' : ''}${quandoCurto(s['inicio'])} até ${hora(s['fim'])}', style: const TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 3),
+            Text([s['titulo'], s['tipo'], s['posto'], s['funcao'], if (s['viatura'] != null) 'VTR ${s['viatura']}']
+                .where((e) => e != null && e.toString().isNotEmpty)
+                .join(' · ')),
+          ]),
+        );
+    return Scaffold(
+      appBar: const Topo(titulo: Text('Meu serviço')),
+      body: ListView(padding: const EdgeInsets.only(top: 12, bottom: 16), children: [
+        if (agora != null) item(agora, emCurso: true),
+        if (agenda.isEmpty && agora == null) const Vazio('Nenhum serviço nos próximos 30 dias.', icone: Icons.event_available),
+        for (final s in agenda) item(s as Map),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text('${dados['servicos_no_mes'] ?? 0} serviço(s) neste mês.', style: TextStyle(color: Cores.de(context).suave)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _TelaDiarias extends StatelessWidget {
+  const _TelaDiarias({required this.diarias});
+  final Map<String, dynamic> diarias;
+
+  @override
+  Widget build(BuildContext context) {
+    final lista = (diarias['lista'] as List?) ?? const [];
+    return Scaffold(
+      appBar: const Topo(titulo: Text('Diárias do mês')),
+      body: ListView(padding: const EdgeInsets.only(top: 12), children: [
+        Cartao(
+          child: Text('${diarias['no_mes'] ?? 0} diária(s) no mês${diarias['limite'] != null ? ' · limite ${diarias['limite']}' : ''}',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+        ),
+        if (lista.isEmpty) const Vazio('Nenhuma diária lançada neste mês.'),
+        for (final g in lista)
+          Cartao(
+            child: Row(children: [
+              Expanded(child: Text('${dataCurta(g['data'])} · ${g['origem']}\n${g['quantidade']} diária(s)')),
+              Pilula(g['situacao']?.toString() ?? ''),
+            ]),
+          ),
+      ]),
+    );
+  }
+}

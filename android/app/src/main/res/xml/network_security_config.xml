@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O certificado da CA própria (pmrn.internal) é carregado pelo app a partir de assets/certs/ca.pem.
+     HTTP sem criptografia fica liberado só para testes na rede interna (o app avisa na tela de entrada). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
