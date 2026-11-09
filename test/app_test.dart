@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sigafape_app/api/api.dart';
+import 'package:sigafape_app/sessao.dart';
 import 'package:sigafape_app/tema.dart';
 import 'package:sigafape_app/util/nativo.dart';
 
@@ -85,6 +86,8 @@ void main() {
     final sessao = await abrirApp(tester);
     await entrar(tester);
     await aba(tester, 'Eu');
+    await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Escuro tático'));
     await tester.pumpAndSettle();
     expect(sessao.tema, Tema.escuro);
@@ -120,5 +123,48 @@ void main() {
       expect(tema.extension<Cores>(), isNotNull);
     }
     await tester.pumpWidget(MaterialApp(theme: temaMaterial(Tema.cinza), home: const SizedBox()));
+  });
+
+  testWidgets('servidor fora do ar: o login tenta o próximo endereço sozinho', (tester) async {
+    final sessao = await abrirApp(tester, servidores: ['https://192.168.10.20', 'https://demonstracao.sigafape'], foraDoAr: {'192.168.10.20'});
+    await entrar(tester);
+    await esperar(tester);
+    expect(sessao.logado, isTrue);
+    expect(sessao.servidor, 'https://demonstracao.sigafape');
+    expect(await Nativo.ler('servidor'), 'https://demonstracao.sigafape');
+  });
+
+  testWidgets('nenhum servidor responde: mostra Sem conexão e salva o endereço novo', (tester) async {
+    final sessao = await abrirApp(tester, servidores: ['https://192.168.10.20', 'https://100.104.230.42'], foraDoAr: {'192.168.10.20', '100.104.230.42'});
+    await entrar(tester);
+    await esperar(tester);
+    expect(find.text('Nenhum servidor respondeu'), findsOneWidget);
+    expect(find.text('sem resposta · está no Wi-Fi da unidade?'), findsOneWidget);
+    expect(find.text('sem resposta · o Tailscale está ligado?'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'demonstracao.sigafape');
+    await tester.tap(find.text('TESTAR E SALVAR'));
+    await esperar(tester);
+    expect(sessao.semConexao, isFalse);
+    expect(sessao.servidores.map((s) => s.endereco), contains('https://demonstracao.sigafape'));
+    expect(find.text('ENTRAR'), findsOneWidget);
+  });
+
+  testWidgets('primeira abertura sem endereço pede o servidor', (tester) async {
+    await abrirApp(tester, servidores: const [], foraDoAr: {'192.168.0.99'});
+    expect(find.text('Configurar servidor'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '192.168.0.99');
+    await tester.tap(find.text('TESTAR E SALVAR'));
+    await esperar(tester);
+    expect(find.textContaining('sem resposta'), findsOneWidget);
+    expect(find.text('Configurar servidor'), findsOneWidget);
+  });
+
+  test('nome sugerido pelo tipo de endereço', () {
+    expect(nomeSugerido('https://192.168.10.20'), 'Wi-Fi da unidade');
+    expect(nomeSugerido('https://100.104.230.42'), 'Tailscale (fora da unidade)');
+    expect(nomeSugerido('https://sigafape.8bpm.internal'), 'Nome interno');
+    expect(nomeSugerido('https://177.20.1.5'), 'IP público');
+    expect(nomeSugerido('https://sigafape.tail1234.ts.net'), 'Endereço na internet');
   });
 }

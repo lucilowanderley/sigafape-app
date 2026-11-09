@@ -98,9 +98,24 @@ class Api {
     return (r.bodyBytes, r.headers['content-type']);
   }
 
-  Future<http.Response> _rede(Future<http.Response> Function() fazer) async {
+  /// Confere se [base] responde como o SIGAFAPE (GET /api/v1/me sem token deve dar 401 em JSON).
+  /// Devolve o tempo de resposta em milissegundos; lança ApiErro se não responder.
+  Future<int> sondar(String base) async {
+    final relogio = Stopwatch()..start();
+    final r = await _rede(() => _cliente.get(Uri.parse('$base/api/v1/me'), headers: const {'Accept': 'application/json'}), limite: const Duration(seconds: 6));
+    var json = false;
     try {
-      return await fazer().timeout(_limite);
+      json = jsonDecode(utf8.decode(r.bodyBytes)) is Map;
+    } catch (_) {}
+    if ((r.statusCode != 401 && r.statusCode != 200) || !json) {
+      throw ApiErro('O endereço respondeu, mas não é o SIGAFAPE (código ${r.statusCode}).', status: r.statusCode);
+    }
+    return relogio.elapsedMilliseconds;
+  }
+
+  Future<http.Response> _rede(Future<http.Response> Function() fazer, {Duration limite = _limite}) async {
+    try {
+      return await fazer().timeout(limite);
     } on TimeoutException {
       throw ApiErro('O servidor demorou para responder. Verifique a conexão e tente de novo.');
     } on HandshakeException {

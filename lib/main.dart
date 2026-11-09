@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'demo.dart';
 import 'screens/entrar.dart';
 import 'screens/inicio.dart';
+import 'screens/servidores.dart';
 import 'screens/trocar_senha.dart';
 import 'sessao.dart';
 import 'tema.dart';
@@ -37,7 +38,9 @@ class AppSigafape extends StatelessWidget {
           localizationsDelegates: GlobalMaterialLocalizations.delegates,
           home: sessao.carregando
               ? const _Abertura()
-              : !sessao.logado
+              : sessao.semConexao
+                  ? const TelaSemConexao()
+                  : !sessao.logado
                   ? const TelaEntrar()
                   : sessao.trocarSenha
                       ? const TelaTrocarSenha(obrigatoria: true)

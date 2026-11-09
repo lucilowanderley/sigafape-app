@@ -61,4 +61,25 @@ void main() {
       await foto(tester, '${t.name}-7-eu');
     });
   }
+
+  testWidgets('servidores', (tester) async {
+    celular(tester);
+    await abrirApp(tester, servidores: ['https://192.168.10.20', 'https://100.104.230.42'], foraDoAr: {'192.168.10.20', '100.104.230.42'});
+    await entrar(tester);
+    await esperar(tester);
+    await foto(tester, 'servidor-1-sem-conexao');
+    await tester.enterText(find.byType(TextField), 'demonstracao.sigafape');
+    await tester.tap(find.text('TESTAR E SALVAR'));
+    await esperar(tester);
+    await entrar(tester);
+    await aba(tester, 'Eu');
+    await tester.tap(find.text('Servidores'));
+    await tester.pumpAndSettle();
+    await foto(tester, 'servidor-2-lista');
+    await tester.tap(find.text('Adicionar endereço'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'IP ou nome do servidor'), 'sigafape.tail1234.ts.net');
+    await tester.pumpAndSettle();
+    await foto(tester, 'servidor-3-adicionar');
+  });
 }

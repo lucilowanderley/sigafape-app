@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -8,11 +10,17 @@ import 'package:sigafape_app/tema.dart';
 import 'package:sigafape_app/util/nativo.dart';
 
 /// Abre o app com a API de demonstração (sem servidor e sem canal nativo).
-Future<Sessao> abrirApp(WidgetTester tester, {Tema tema = Tema.azul}) async {
+/// [servidores]: endereços salvos no celular (o primeiro em uso); os de [foraDoAr] não respondem.
+Future<Sessao> abrirApp(WidgetTester tester,
+    {Tema tema = Tema.azul, List<String> servidores = const ['https://demonstracao.sigafape'], Set<String> foraDoAr = const {}}) async {
   Nativo.semCanal = true;
+  hostsForaDoAr
+    ..clear()
+    ..addAll(foraDoAr);
   await initializeDateFormatting('pt_BR');
   await Nativo.gravar('tema', tema.name);
-  await Nativo.gravar('servidor', 'https://demonstracao.sigafape');
+  await Nativo.gravar('servidores', jsonEncode([for (final s in servidores) {'nome': nomeSugerido(s), 'endereco': s}]));
+  await Nativo.gravar('servidor', servidores.isEmpty ? null : servidores.first);
   await Nativo.gravarSegredo('token', null);
   final sessao = Sessao(cliente: clienteDemo());
   await tester.pumpWidget(AppSigafape(sessao: sessao));

@@ -7,6 +7,7 @@ import '../util/formato.dart';
 import '../widgets/comum.dart';
 import 'ficha.dart';
 import 'inspecoes.dart';
+import 'servidores.dart';
 import 'trocar_senha.dart';
 
 /// Eu: minha ficha, inspeções, aparelhos conectados, aparência (cor do app), senha e sair.
@@ -50,6 +51,7 @@ class TelaEu extends StatelessWidget {
             opcao(Icons.badge_outlined, 'Minha ficha', 'Dados funcionais e pessoais; pedir atualização ao RH', () => abrir(const TelaFicha())),
             opcao(Icons.verified_user_outlined, 'Inspeção do arsenal', 'Convocações e resultados', () => abrir(const TelaInspecoes())),
             opcao(Icons.devices_outlined, 'Aparelhos conectados', 'Desconecte um celular perdido', () => abrir(const _TelaAparelhos())),
+            opcao(Icons.dns_outlined, 'Servidores', 'Wi-Fi da unidade, Tailscale e outros endereços', () => abrir(const TelaServidores())),
           ]),
         ),
         const TituloSecao('Aparência'),

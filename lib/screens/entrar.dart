@@ -4,6 +4,7 @@ import '../api/api.dart';
 import '../sessao.dart';
 import '../tema.dart';
 import '../widgets/comum.dart';
+import 'servidores.dart';
 
 class TelaEntrar extends StatefulWidget {
   const TelaEntrar({super.key});
@@ -15,16 +16,13 @@ class TelaEntrar extends StatefulWidget {
 class _TelaEntrarState extends State<TelaEntrar> {
   final _usuario = TextEditingController();
   final _senha = TextEditingController();
-  late final TextEditingController _servidor;
-  bool _enviando = false, _ver = false, _editarServidor = false;
+  bool _enviando = false, _ver = false;
   String? _erro;
 
   @override
   void initState() {
     super.initState();
     final s = Escopo.ler(context);
-    _servidor = TextEditingController(text: s.servidor);
-    _editarServidor = s.servidor.isEmpty;
     _erro = s.avisoSaida;
   }
 
@@ -32,19 +30,11 @@ class _TelaEntrarState extends State<TelaEntrar> {
   void dispose() {
     _usuario.dispose();
     _senha.dispose();
-    _servidor.dispose();
     super.dispose();
   }
 
   Future<void> _entrar() async {
     FocusScope.of(context).unfocus();
-    if (Api.normalizarServidor(_servidor.text).isEmpty) {
-      setState(() {
-        _editarServidor = true;
-        _erro = 'Informe o endereço do sistema (peça ao administrador).';
-      });
-      return;
-    }
     if (_usuario.text.trim().isEmpty || _senha.text.isEmpty) {
       setState(() => _erro = 'Informe usuário (ou matrícula) e senha.');
       return;
@@ -54,7 +44,7 @@ class _TelaEntrarState extends State<TelaEntrar> {
       _erro = null;
     });
     try {
-      await Escopo.ler(context).entrar(_servidor.text, _usuario.text, _senha.text);
+      await Escopo.ler(context).entrar(_usuario.text, _senha.text);
     } on ApiErro catch (e) {
       if (mounted) {
         setState(() {
@@ -69,7 +59,8 @@ class _TelaEntrarState extends State<TelaEntrar> {
   @override
   Widget build(BuildContext context) {
     final c = Cores.de(context);
-    final semHttps = Api.normalizarServidor(_servidor.text).startsWith('http://');
+    final servidor = Escopo.de(context).servidor;
+    final semHttps = servidor.startsWith('http://');
     return Scaffold(
       body: Stack(children: [
         Column(children: [
@@ -117,16 +108,6 @@ class _TelaEntrarState extends State<TelaEntrar> {
                             ),
                             onSubmitted: (_) => _entrar(),
                           ),
-                          if (_editarServidor) ...[
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _servidor,
-                              enabled: !_enviando,
-                              keyboardType: TextInputType.url,
-                              decoration: const InputDecoration(labelText: 'Endereço do sistema', hintText: 'https://sigafape.pmrn.internal'),
-                              onChanged: (_) => setState(() {}),
-                            ),
-                          ],
                           if (semHttps) ...[
                             const SizedBox(height: 8),
                             const Text('Atenção: endereço sem HTTPS. Use só para testes na rede interna.',
@@ -142,12 +123,10 @@ class _TelaEntrarState extends State<TelaEntrar> {
                             child: _enviando ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)) : const Text('ENTRAR'),
                           ),
                           const SizedBox(height: 8),
-                          TextButton(
-                            onPressed: () => setState(() => _editarServidor = !_editarServidor),
-                            child: Text(
-                              _servidor.text.isEmpty ? 'Configurar servidor' : 'Servidor: ${Api.normalizarServidor(_servidor.text).replaceFirst(RegExp(r'^https?://'), '')}',
-                              style: TextStyle(color: c.suave, fontSize: 12.5),
-                            ),
+                          TextButton.icon(
+                            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TelaServidores())),
+                            icon: Icon(Icons.dns_outlined, size: 16, color: c.suave),
+                            label: Text('Servidor: ${servidor.replaceFirst(RegExp(r'^https?://'), '')}', style: TextStyle(color: c.suave, fontSize: 12.5)),
                           ),
                         ]),
                       ),

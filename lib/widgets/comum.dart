@@ -128,6 +128,14 @@ class Falha extends StatelessWidget {
             textAlign: TextAlign.center, style: TextStyle(color: c.texto, fontSize: 15)),
         const SizedBox(height: 16),
         OutlinedButton.icon(onPressed: tentar, icon: const Icon(Icons.refresh), label: const Text('Tentar de novo')),
+        // Sem rede: procura outro endereço salvo; se nenhum responder, o app abre a tela Sem conexão.
+        if (erro is ApiErro && (erro as ApiErro).status == 0)
+          TextButton(
+            onPressed: () async {
+              if (await Escopo.ler(context).procurarServidor()) tentar();
+            },
+            child: const Text('Procurar outro servidor'),
+          ),
       ]),
     );
   }

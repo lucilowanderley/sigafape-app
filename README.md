@@ -23,7 +23,7 @@ Login por usuário **ou matrícula**. O token do aparelho fica cifrado com chave
 
 O GitHub gera o .apk sozinho a cada envio na `main`: **Actions → Gerar APK → execução mais recente → Artifacts → sigafape-apk**.
 
-- `sigafape-operador-de-campo.apk`: o app de verdade. Na primeira abertura, informe o endereço do sistema (ex.: `https://sigafape.pmrn.internal`).
+- `sigafape-operador-de-campo.apk`: o app de verdade. Na primeira abertura, informe o endereço do sistema (ex.: `https://sigafape.8bpm.internal`).
 - `sigafape-demonstracao.apk`: funciona **sem servidor**, com dados de exemplo. Entre com qualquer usuário e a senha `demo`; nas assinaturas use a matrícula `215.347-8` e a senha `demo`.
 
 Para já sair com o endereço preenchido: *Actions → Gerar APK → Run workflow* e preencha **servidor**.
@@ -34,6 +34,12 @@ Ao criar uma tag `v1.0.0`, `v1.0.1`... o .apk também vai para **Releases**.
 Sem a chave de assinatura, o celular não aceita instalar uma versão nova por cima da antiga.
 Cadastre em *Settings → Secrets and variables → Actions*: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_SENHA`, `ANDROID_KEY_ALIAS` e `ANDROID_KEY_SENHA`.
 O arquivo `.jks` e as senhas **nunca** vão para o repositório.
+
+## Servidores (vários endereços)
+
+Em *Eu → Servidores* o policial guarda mais de um endereço do sistema (Wi-Fi da unidade, Tailscale, nome interno, endereço na internet).
+O app tenta na ordem da lista e usa o primeiro que responder. Se nenhum responder, abre a tela **Sem conexão**, que mostra o resultado de cada
+endereço e permite testar e salvar um novo. Todo endereço é testado antes de ser salvo (`GET /api/v1/me` precisa responder 401 em JSON).
 
 ## Rede interna com CA própria (pmrn.internal)
 

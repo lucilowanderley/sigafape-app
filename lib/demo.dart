@@ -7,6 +7,9 @@ import 'package:http/testing.dart';
 /// Login: qualquer usuário com a senha "demo". Assinaturas: matrícula 215.347-8 e senha "demo".
 const modoDemo = bool.fromEnvironment('DEMO');
 
+/// Endereços que a demonstração trata como fora do ar (testes e prints da tela Sem conexão).
+final hostsForaDoAr = <String>{};
+
 http.Client clienteDemo() {
   final hoje = DateTime.now();
   String iso(DateTime d) => '${d.toIso8601String().split('.').first}-03:00';
@@ -66,6 +69,7 @@ http.Client clienteDemo() {
 
   return MockClient((req) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (hostsForaDoAr.contains(req.url.host)) throw http.ClientException('Servidor não respondeu', req.url);
     final caminho = req.url.path.split('/api/v1/').last;
     final corpo = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
     switch ((req.method, caminho)) {
