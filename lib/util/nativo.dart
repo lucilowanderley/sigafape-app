@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/services.dart';
 
 /// Funções nativas do app (MainActivity.kt no Android, AppDelegate.swift no iOS).
@@ -66,8 +68,12 @@ class Nativo {
       return Local((m!['latitude'] as num).toDouble(), (m['longitude'] as num).toDouble(), (m['precisao'] as num?)?.toDouble());
     } on PlatformException catch (e) {
       throw ErroLocal(switch (e.code) {
-        'sem_permissao' => 'O app precisa da permissão de localização. Libere em Configurações › Apps › SIGAFAPE › Permissões.',
-        'gps_desligado' => 'A localização do celular está desligada. Ligue o GPS e tente de novo.',
+        'sem_permissao' => Platform.isIOS
+            ? 'O app precisa da permissão de localização. Libere em Ajustes › SIGAFAPE › Localização.'
+            : 'O app precisa da permissão de localização. Libere em Configurações › Apps › SIGAFAPE › Permissões.',
+        'gps_desligado' => Platform.isIOS
+            ? 'A localização do iPhone está desligada. Ligue em Ajustes › Privacidade e Segurança › Serviços de Localização.'
+            : 'A localização do celular está desligada. Ligue o GPS e tente de novo.',
         _ => 'Não foi possível obter a sua localização. Vá para um lugar aberto e tente de novo.',
       });
     } on MissingPluginException {
