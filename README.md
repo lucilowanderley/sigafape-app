@@ -1,6 +1,6 @@
 # SIGAFAPE · app do Operador de Campo
 
-App de celular (Android e, depois, iPhone) do policial, feito em **Flutter**. Usa a API `/api/v1` do sistema web
+App de celular (Android e iPhone) do policial, feito em **Flutter**. Usa a API `/api/v1` do sistema web
 ([armaria-digital](https://github.com/lucilowanderley/armaria-digital), documentação em `docs/API-APP-OPERADOR-DE-CAMPO.md`).
 
 - **Android 6.0 ou mais novo** (API 23). É o mínimo aceito pelo Flutter atual.
@@ -34,6 +34,17 @@ Ao criar uma tag `v1.0.0`, `v1.0.1`... o .apk também vai para **Releases**.
 Sem a chave de assinatura, o celular não aceita instalar uma versão nova por cima da antiga.
 Cadastre em *Settings → Secrets and variables → Actions*: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_SENHA`, `ANDROID_KEY_ALIAS` e `ANDROID_KEY_SENHA`.
 O arquivo `.jks` e as senhas **nunca** vão para o repositório.
+
+## App do iPhone (iOS 15 ou mais novo)
+
+O workflow **Gerar app iOS** (`.github/workflows/ios.yml`) compila o app num Mac do GitHub, sem precisar de Mac próprio:
+
+- Sempre sai o `.ipa` **sem assinatura** (app real e demonstração) em Actions → execução → Artifacts → `sigafape-ios`.
+  Ele confere que o app compila e pode ser instalado com ferramentas de *sideload* usando um Apple ID (o app vence em 7 dias).
+- Com a conta **Apple Developer** e os segredos `IOS_*` e `ASC_*` cadastrados (lista no topo do workflow),
+  também sai o `.ipa` assinado e vai direto para o **TestFlight**, de onde os policiais instalam no iPhone.
+
+Identificador do app: `br.gov.rn.pm.sigafape.sigafapeApp`.
 
 ## Servidores (vários endereços)
 

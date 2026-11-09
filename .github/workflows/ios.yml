@@ -1,0 +1,133 @@
+name: Gerar app iOS
+
+# Compila o app para iPhone num Mac do GitHub (não precisa de Mac próprio).
+#
+# 1) Sempre: gera o .ipa SEM assinatura (confere que o app compila e serve para instalar com
+#    ferramentas de "sideload" usando um Apple ID). Baixe em Actions → execução → Artifacts.
+# 2) Quando os segredos da Apple estiverem cadastrados (Settings → Secrets and variables → Actions),
+#    também gera o .ipa assinado e envia ao TestFlight, de onde os policiais instalam no iPhone:
+#      IOS_TEAM_ID               ID do time na conta Apple Developer (10 letras/números)
+#      IOS_CERTIFICADO_P12_BASE64, IOS_CERTIFICADO_SENHA   certificado "Apple Distribution" (.p12)
+#      IOS_PERFIL_BASE64         perfil de distribuição "App Store" do app (.mobileprovision)
+#      ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8_BASE64        chave da API do App Store Connect (.p8)
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      servidor:
+        description: 'Endereço do sistema já preenchido no app (opcional), ex.: https://sigafape.pmrn.internal'
+        required: false
+        default: ''
+      testflight:
+        description: 'Enviar ao TestFlight (precisa dos segredos da Apple)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    env:
+      TEM_APPLE: ${{ secrets.IOS_CERTIFICADO_P12_BASE64 != '' && secrets.ASC_KEY_P8_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Gerar o .ipa sem assinatura (app real e demonstração)
+        run: |
+          gerar() {
+            flutter build ios --release --no-codesign --build-number=${{ github.run_number }} "$@"
+            rm -rf Payload && mkdir Payload && cp -R build/ios/iphoneos/Runner.app Payload/
+            zip -qry "$SAIDA" Payload && rm -rf Payload
+          }
+          SAIDA=sigafape-ios-sem-assinatura.ipa gerar --dart-define=SERVIDOR=${{ inputs.servidor }}
+          SAIDA=sigafape-ios-demonstracao-sem-assinatura.ipa gerar --dart-define=DEMO=true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sigafape-ios
+          path: '*.ipa'
+
+      # ---------- Daqui para baixo só com a conta Apple Developer ----------
+
+      - name: Avisar que falta a conta Apple
+        if: ${{ env.TEM_APPLE != 'true' }}
+        run: |
+          echo "::notice::Sem os segredos da Apple, saiu só o .ipa sem assinatura (o TestFlight fica para quando a conta Apple Developer estiver cadastrada)."
+
+      - name: Preparar certificado, perfil e chave da API
+        if: ${{ env.TEM_APPLE == 'true' && github.event_name != 'pull_request' }}
+        env:
+          P12: ${{ secrets.IOS_CERTIFICADO_P12_BASE64 }}
+          P12_SENHA: ${{ secrets.IOS_CERTIFICADO_SENHA }}
+          PERFIL: ${{ secrets.IOS_PERFIL_BASE64 }}
+          P8: ${{ secrets.ASC_KEY_P8_BASE64 }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          CHAVEIRO="$RUNNER_TEMP/sigafape.keychain-db"
+          SENHA_CHAVEIRO="$(uuidgen)"
+          echo "$P12" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$SENHA_CHAVEIRO" "$CHAVEIRO"
+          security set-keychain-settings -lut 21600 "$CHAVEIRO"
+          security unlock-keychain -p "$SENHA_CHAVEIRO" "$CHAVEIRO"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_SENHA" -A -t cert -f pkcs12 -k "$CHAVEIRO"
+          security set-key-partition-list -S apple-tool:,apple: -k "$SENHA_CHAVEIRO" "$CHAVEIRO" > /dev/null
+          security list-keychains -d user -s "$CHAVEIRO" $(security list-keychains -d user | tr -d '"')
+
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PERFIL" | base64 -d > "$RUNNER_TEMP/perfil.mobileprovision"
+          security cms -D -i "$RUNNER_TEMP/perfil.mobileprovision" > "$RUNNER_TEMP/perfil.plist"
+          UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/perfil.plist")
+          NOME_PERFIL=$(/usr/libexec/PlistBuddy -c 'Print Name' "$RUNNER_TEMP/perfil.plist")
+          cp "$RUNNER_TEMP/perfil.mobileprovision" ~/Library/MobileDevice/Provisioning\ Profiles/"$UUID".mobileprovision
+          echo "NOME_PERFIL=$NOME_PERFIL" >> "$GITHUB_ENV"
+
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$P8" | base64 -d > ~/.appstoreconnect/private_keys/AuthKey_"$KEY_ID".p8
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+          <key>method</key><string>app-store-connect</string>
+          <key>signingStyle</key><string>manual</string>
+          <key>teamID</key><string>$TEAM_ID</string>
+          <key>provisioningProfiles</key><dict>
+          <key>br.gov.rn.pm.sigafape.sigafapeApp</key><string>$NOME_PERFIL</string>
+          </dict>
+          </dict></plist>
+          EOF
+
+      - name: Gerar o .ipa assinado e enviar ao TestFlight
+        if: ${{ env.TEM_APPLE == 'true' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.testflight) }}
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          flutter build ios --release --config-only --build-number=${{ github.run_number }} --dart-define=SERVIDOR=${{ inputs.servidor }}
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Runner.xcarchive archive \
+            DEVELOPMENT_TEAM="$TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$NOME_PERFIL"
+          xcodebuild -exportArchive -archivePath build/Runner.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath build/ipa
+          cp build/ipa/*.ipa sigafape-ios-testflight.ipa
+          xcrun altool --upload-app -f sigafape-ios-testflight.ipa -t ios --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
+
+      - name: Limpar o chaveiro
+        if: ${{ always() }}
+        run: security delete-keychain "$RUNNER_TEMP/sigafape.keychain-db" 2>/dev/null || true
