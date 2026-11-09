@@ -82,4 +82,38 @@ void main() {
     await tester.pumpAndSettle();
     await foto(tester, 'servidor-3-adicionar');
   });
+
+  testWidgets('pedidos do campo', (tester) async {
+    celular(tester);
+    await abrirApp(tester);
+    await entrar(tester);
+    await foto(tester, 'campo-1-inicio');
+    await tester.tap(find.byTooltip('Pedir apoio urgente'));
+    await tester.pumpAndSettle();
+    await foto(tester, 'campo-2-apoio-confirmar');
+    await tester.tap(find.text('CONFIRMAR'));
+    await esperar(tester);
+    await foto(tester, 'campo-3-apoio-enviado');
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Caderno'));
+    await esperar(tester);
+    await foto(tester, 'campo-4-caderno');
+    await tester.tap(find.byType(BackButton));
+    await esperar(tester);
+    await tester.tap(find.text('Abrir ocorrência'));
+    await esperar(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Roubo'));
+    await tester.enterText(find.widgetWithText(TextField, 'Rua, número'), 'Rua Coronel Martiniano, 410');
+    await tester.enterText(find.widgetWithText(TextField, 'Bairro'), 'Centro');
+    await tester.tap(find.text('Usar minha localização (GPS)'));
+    await esperar(tester);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await foto(tester, 'campo-5-nova-ocorrencia');
+    await tester.tap(find.byType(BackButton));
+    await esperar(tester);
+    await tester.tap(find.text('MINHAS OCORRÊNCIAS'));
+    await esperar(tester);
+    await foto(tester, 'campo-6-minhas-ocorrencias');
+  });
 }

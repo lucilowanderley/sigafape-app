@@ -19,10 +19,31 @@ http.Client clienteDemo() {
   var recebimentoPendente = true;
   var alertaPendente = true;
   var avisos = 1;
+  var notaId = 3;
+  final notas = <Map<String, dynamic>>[
+    {'id': 2, 'texto': 'Placa suspeita QGH-2E41, Gol prata', 'criada_em': iso(hoje.subtract(const Duration(minutes: 40)))},
+    {'id': 1, 'texto': 'VTR 1-0817 abasteceu, volta 13:40', 'criada_em': iso(hoje.subtract(const Duration(hours: 1)))},
+  ];
+  var pedidoId = 40;
+  final pedidos = <Map<String, dynamic>>[
+    {'id': 39, 'tipo': 'ocorrencia', 'titulo': 'Furto', 'natureza': 'Furto', 'local': 'Praça da Matriz · Centro', 'situacao': 'aceita', 'situacao_texto': 'Aceita', 'resposta': null,
+     'respondida_por': 'SD MARIA', 'ocorrencia': '${hoje.year}/00276', 'equipe': 'RP 12', 'criada_em': iso(hoje.subtract(const Duration(hours: 2)))},
+    {'id': 38, 'tipo': 'ocorrencia', 'titulo': 'Perturbação do sossego', 'natureza': 'Perturbação do sossego', 'local': 'Rua 7 · Rocas', 'situacao': 'recusada', 'situacao_texto': 'Recusada',
+     'resposta': 'já atendida pela ${hoje.year}/00270', 'respondida_por': 'SD MARIA', 'ocorrencia': null, 'equipe': null, 'criada_em': iso(hoje.subtract(const Duration(hours: 5)))},
+  ];
+  Map<String, dynamic> pedido(String tipo, Map c) {
+    final p = {
+      'id': pedidoId++, 'tipo': tipo, 'titulo': tipo == 'apoio' ? 'Apoio urgente' : c['natureza'], 'natureza': c['natureza'],
+      'local': (c['endereco']?.toString().isNotEmpty ?? false) ? [c['endereco'], c['bairro']].where((e) => e != null && e.toString().isNotEmpty).join(' · ') : 'GPS ${c['latitude']}, ${c['longitude']}',
+      'situacao': 'pendente', 'situacao_texto': 'Aguardando o COPOM', 'resposta': null, 'respondida_por': null, 'ocorrencia': null, 'equipe': null, 'criada_em': iso(DateTime.now()),
+    };
+    pedidos.insert(0, p);
+    return p;
+  }
 
   final usuario = {
     'id': 7, 'usuario': 'joao', 'nome': 'CB JOÃO BATISTA', 'perfil': 'Operador de Módulo', 'funcao': 'Operador de Campo', 'unidade': '8º BPM',
-    'iniciais': 'JB', 'trocar_senha': false, 'vinculado': true,
+    'iniciais': 'JB', 'foto': 'https://demonstracao.sigafape/api/v1/foto?v=demo1', 'trocar_senha': false, 'vinculado': true,
     'policial': {'id': 31, 'nome': 'CB JOÃO BATISTA', 'nome_completo': 'JOÃO BATISTA DA SILVA', 'matricula': '215.347-8', 'unidade': '8º BPM · 1ª CIA', 'situacao': 'Pronto', 'de_outra_unidade': null},
   };
 
@@ -139,8 +160,37 @@ http.Client clienteDemo() {
           'data': {'id': 31, 'name': 'JOÃO BATISTA DA SILVA', 'war_name': 'BATISTA', 'rank': 'CB', 'code': '215.347-8', 'unit': '8º BPM · 1ª CIA', 'situacao_texto': 'Pronto', 'phone': '(84) 99999-0000', 'city': 'Natal', 'cnh_category': 'AB', 'cnh_expires_at': '2029-04-13', 'cnh_situacao': 'valida'},
           'secoes_atualizacao': {'contato': 'Telefone ou e-mail', 'endereco': 'Endereço', 'familia': 'Família e dependentes', 'outro': 'Outro'},
         });
+      case ('GET', 'foto'):
+        return http.Response.bytes(base64Decode(_fotoDemo), 200, headers: {'content-type': 'image/png'});
+      case ('GET', 'caderno'):
+        return json({'data': notas});
+      case ('POST', 'caderno'):
+        if ((corpo['texto'] ?? '').toString().trim().isEmpty) return json({'message': 'Escreva a anotação.', 'errors': {'texto': ['Escreva a anotação.']}}, 422);
+        notas.insert(0, {'id': notaId++, 'texto': corpo['texto'], 'criada_em': iso(DateTime.now())});
+        return json({'data': notas}, 201);
+      case ('GET', 'ocorrencias'):
+        return json({'data': pedidos, 'naturezas': ['Furto', 'Roubo', 'Ameaça', 'Perturbação do sossego', 'Violência doméstica', 'Lesão corporal', 'Tráfico de drogas', 'Acidente de trânsito']});
+      case ('POST', 'ocorrencias'):
+        final erros = <String, List<String>>{
+          if ((corpo['natureza'] ?? '').toString().isEmpty) 'natureza': ['Escolha a natureza.'],
+          if ((corpo['endereco'] ?? '').toString().isEmpty && corpo['latitude'] == null) 'endereco': ['Informe o endereço ou use a sua localização.'],
+        };
+        if (erros.isNotEmpty) return json({'message': erros.values.first.first, 'errors': erros}, 422);
+        return json({'message': 'Ocorrência enviada ao COPOM. Você será avisado quando responderem.', 'data': pedido('ocorrencia', corpo)}, 201);
+      case ('POST', 'apoio'):
+        return json({'message': 'Pedido de apoio enviado ao COPOM com a sua localização.', 'data': pedido('apoio', corpo)}, 201);
       case ('POST', 'ficha/atualizacao'):
         return json({'message': 'Pedido enviado ao RH.', 'protocolo': 'ALT-2026-0124'}, 201);
+    }
+    if (req.method == 'DELETE' && caminho.startsWith('caderno/')) {
+      notas.removeWhere((n) => n['id'].toString() == caminho.split('/')[1]);
+      return json({'data': notas});
+    }
+    if (req.method == 'POST' && caminho.startsWith('ocorrencias/') && caminho.endsWith('/cancelar')) {
+      final p = pedidos.firstWhere((p) => p['id'].toString() == caminho.split('/')[1]);
+      p['situacao'] = 'cancelada';
+      p['situacao_texto'] = 'Cancelada';
+      return json({'message': 'Pedido cancelado.', 'data': p});
     }
     if (req.method == 'GET' && caminho.startsWith('cautelas/')) {
       final id = int.parse(caminho.split('/')[1]);
@@ -155,3 +205,5 @@ http.Client clienteDemo() {
     return json({'message': 'Registro não encontrado.'}, 404);
   });
 }
+
+const _fotoDemo = 'iVBORw0KGgoAAAANSUhEUgAAAHgAAACWCAIAAACaSNt3AAACTElEQVR42u3dMW7cMBAF0HiQc6ZPk8OkSe9TuM8dcp6cIEawEme+yPdbA17y4XtMrVfy28fvP19kfQoBaNACGjRoAQ1aQIMGLaBBC2jQoAU0aAENGrSABi2gI/P1KQv9+ev9X1/68f1b/vrfkj+p9Anu49BDoV8gDueOg75IHMsdBH0jcSB37a289Ds/D3q1RYJ1ba8cYl0nKCdY1yHK49Z1jvLs69ZRux18dW8q7QudcNjqX4NGbwodcp3WvxKN3hE6p87969Fo0KAlGjptQDevSqONDtACGjRoBKBBSzJ05scP21al0UYHaEmHThvTnevR6E2hc0rdvBKN3hc6odT9a9DoraFnSz3y6nXUbgdft45q1uBP0vCM7tz57Lya/2XYs//xo07EqWO1QsKBMuV4t84i5FrUveCnQt/C7ekGy7k9r2MhuifQSN6pA7SABi2gQYMW0E/KA55N+p8X4uHXh4lXhre8gZfmngK99MbKBPR56LZ7V2e5x6AH71geER+ADrkpvJm7FTrwvvsN72E5/OkGHY3OJG6udlHuWWdR7lntqtHxLOKGMVKUe9ZflHt2UZR79lKUe3ZUlHv2VZR7dleUe/bob4ZNKXXu2WlR7tlvUe7ZtRmdPaPPrPOVvRflHgGjI3V0qPNrDhod2Wh1fllDo/Marc5XTDQ6+4JFVkGbGxdlNNroOBDa3Ljuo9FGx2nQ5sYt00OjjQ7QAho0aEeOnoOHRhsdoAU0aNAIQIMW0KBBC2jQcjf0I/4hREg+t9JoowO0gM7NX9Ji9B8rHMy+AAAAAElFTkSuQmCC';

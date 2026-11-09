@@ -167,4 +167,74 @@ void main() {
     expect(nomeSugerido('https://177.20.1.5'), 'IP público');
     expect(nomeSugerido('https://sigafape.tail1234.ts.net'), 'Endereço na internet');
   });
+
+  testWidgets('ícone de apoio confirma e envia a localização ao COPOM', (tester) async {
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.tap(find.byTooltip('Pedir apoio urgente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pedir apoio urgente?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pedido enviado'), findsNothing);
+
+    await tester.tap(find.byTooltip('Pedir apoio urgente'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CONFIRMAR'));
+    await esperar(tester);
+    expect(find.text('Pedido enviado'), findsOneWidget);
+    expect(find.textContaining('com a sua localização'), findsOneWidget);
+  });
+
+  testWidgets('apoio sem GPS avisa o policial', (tester) async {
+    await abrirApp(tester);
+    await entrar(tester);
+    Nativo.localDeTeste = null;
+    addTearDown(() => Nativo.localDeTeste = const Local(-5.79448, -35.21100, 9));
+    await tester.tap(find.byTooltip('Pedir apoio urgente'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CONFIRMAR'));
+    await esperar(tester);
+    expect(find.textContaining('Não foi possível obter a sua localização'), findsOneWidget);
+  });
+
+  testWidgets('caderno ao lado do sino anota e lista', (tester) async {
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.tap(find.byTooltip('Caderno'));
+    await esperar(tester);
+    expect(find.text('Placa suspeita QGH-2E41, Gol prata'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Ponto base: praça da matriz');
+    await tester.tap(find.byTooltip('Anotar'));
+    await esperar(tester);
+    expect(find.text('Ponto base: praça da matriz'), findsOneWidget);
+  });
+
+  testWidgets('abre ocorrência pelo cartão e vê em Minhas ocorrências', (tester) async {
+    tester.view.physicalSize = const Size(800, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.tap(find.text('Abrir ocorrência'));
+    await esperar(tester);
+    await tester.tap(find.text('ENVIAR AO COPOM'));
+    await esperar(tester);
+    expect(find.text('Escolha a natureza.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Roubo'));
+    await tester.enterText(find.widgetWithText(TextField, 'Rua, número'), 'Rua Coronel Martiniano, 410');
+    await tester.tap(find.text('Usar minha localização (GPS)'));
+    await esperar(tester);
+    expect(find.textContaining('precisão 9 m'), findsOneWidget);
+    await tester.tap(find.text('ENVIAR AO COPOM'));
+    await esperar(tester);
+    await esperar(tester);
+    expect(find.text('1 aguardando'), findsOneWidget);
+
+    await tester.tap(find.text('MINHAS OCORRÊNCIAS'));
+    await esperar(tester);
+    expect(find.text('Aguardando o COPOM'), findsOneWidget);
+    expect(find.textContaining('Motivo: já atendida'), findsOneWidget);
+  });
 }

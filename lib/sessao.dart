@@ -7,7 +7,7 @@ import 'api/api.dart';
 import 'tema.dart';
 import 'util/nativo.dart';
 
-const versaoApp = '1.1.0';
+const versaoApp = '1.2.0';
 
 /// Endereço padrão do sistema; pode vir na compilação: --dart-define=SERVIDOR=https://...
 const servidorPadrao = String.fromEnvironment('SERVIDOR', defaultValue: bool.fromEnvironment('DEMO') ? 'https://demonstracao.sigafape' : '');
@@ -205,6 +205,33 @@ class Sessao extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Foto 3x4 do Efetivo (baixada com o token; guardada só na memória do app).
+  Uint8List? foto;
+  String? _fotoDe;
+
+  Future<void> carregarFoto() async {
+    final url = usuario?['foto']?.toString();
+    if (url == null || url.isEmpty) {
+      if (foto != null) {
+        foto = null;
+        _fotoDe = null;
+        notifyListeners();
+      }
+      return;
+    }
+    if (url == _fotoDe) return;
+    try {
+      // Usa o endereço em uso (o servidor pode ter montado o link com outro nome).
+      final v = Uri.tryParse(url)?.queryParameters['v'];
+      final (bytes, _) = await api.baixar('${api.servidor}/api/v1/foto${v != null ? '?v=$v' : ''}');
+      foto = bytes;
+      _fotoDe = url;
+      notifyListeners();
+    } catch (_) {
+      // Sem foto: o cartão continua com as iniciais.
+    }
+  }
+
   Future<void> atualizarUsuario() async {
     usuario = (await api.get('me'))['data'] as Map<String, dynamic>?;
     await _guardarUsuario();
@@ -246,6 +273,8 @@ class Sessao extends ChangeNotifier {
   Future<void> _limpar() async {
     api.token = null;
     usuario = null;
+    foto = null;
+    _fotoDe = null;
     await Nativo.gravarSegredo('token', null);
     await Nativo.gravar('usuario', null);
   }

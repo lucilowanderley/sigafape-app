@@ -50,4 +50,41 @@ class Nativo {
     if (semCanal) return false;
     return await _canal.invokeMethod<bool>('abrirArquivo', {'nome': nome, 'bytes': bytes, 'tipo': tipo}) ?? false;
   }
+
+  /// Posição de teste (testes e modo demonstração no computador).
+  static Local? localDeTeste = const Local(-5.79448, -35.21100, 9);
+
+  /// GPS do celular. Pede a permissão na primeira vez. Lança [ErroLocal] com a mensagem para o policial.
+  static Future<Local> localizacao() async {
+    if (semCanal) {
+      final l = localDeTeste;
+      if (l == null) throw const ErroLocal('Não foi possível obter a sua localização. Vá para um lugar aberto e tente de novo.');
+      return l;
+    }
+    try {
+      final m = await _canal.invokeMapMethod<String, dynamic>('localizacao');
+      return Local((m!['latitude'] as num).toDouble(), (m['longitude'] as num).toDouble(), (m['precisao'] as num?)?.toDouble());
+    } on PlatformException catch (e) {
+      throw ErroLocal(switch (e.code) {
+        'sem_permissao' => 'O app precisa da permissão de localização. Libere em Configurações › Apps › SIGAFAPE › Permissões.',
+        'gps_desligado' => 'A localização do celular está desligada. Ligue o GPS e tente de novo.',
+        _ => 'Não foi possível obter a sua localização. Vá para um lugar aberto e tente de novo.',
+      });
+    } on MissingPluginException {
+      throw const ErroLocal('Localização indisponível neste aparelho.');
+    }
+  }
+}
+
+class Local {
+  const Local(this.latitude, this.longitude, [this.precisao]);
+  final double latitude, longitude;
+  final double? precisao;
+}
+
+class ErroLocal implements Exception {
+  const ErroLocal(this.mensagem);
+  final String mensagem;
+  @override
+  String toString() => mensagem;
 }
