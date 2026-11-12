@@ -12,8 +12,10 @@ import 'package:sigafape_app/util/nativo.dart';
 /// Abre o app com a API de demonstração (sem servidor e sem canal nativo).
 /// [servidores]: endereços salvos no celular (o primeiro em uso); os de [foraDoAr] não respondem.
 Future<Sessao> abrirApp(WidgetTester tester,
-    {Tema tema = Tema.azul, List<String> servidores = const ['https://demonstracao.sigafape'], Set<String> foraDoAr = const {}}) async {
+    {Tema tema = Tema.azul, List<String> servidores = const ['https://demonstracao.sigafape'], Set<String> foraDoAr = const {}, bool padroes = false}) async {
   Nativo.semCanal = true;
+  Sessao.usarEnderecosPadrao = padroes;
+  await Nativo.gravar('enderecos_padrao', null);
   hostsForaDoAr
     ..clear()
     ..addAll(foraDoAr);

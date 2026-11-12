@@ -12,6 +12,12 @@ const versaoApp = '1.2.0';
 /// Endereço padrão do sistema; pode vir na compilação: --dart-define=SERVIDOR=https://...
 const servidorPadrao = String.fromEnvironment('SERVIDOR', defaultValue: bool.fromEnvironment('DEMO') ? 'https://demonstracao.sigafape' : '');
 
+/// Endereços do 8º BPM já cadastrados no app (Eu → Servidores): Wi-Fi da unidade e 4G (Tailscale Funnel, porta 8443).
+const enderecosPadrao = [
+  ('Wi-Fi da unidade', 'https://sigafape.8bpm.internal'),
+  ('4G (internet)', 'https://sigafape.ide-pirarucu.ts.net:8443'),
+];
+
 /// Estado do app: servidor, token do aparelho, usuário logado e cor escolhida.
 class Sessao extends ChangeNotifier {
   Sessao({http.Client? cliente}) {
@@ -97,6 +103,9 @@ class Sessao extends ChangeNotifier {
 
   // ---------------------------------------------------------------- servidores
 
+  /// Falso na demonstração e nos testes (que montam a própria lista).
+  static bool usarEnderecosPadrao = !bool.fromEnvironment('DEMO');
+
   Future<void> _carregarServidores() async {
     final lista = await Nativo.ler('servidores');
     if (lista != null) {
@@ -107,6 +116,14 @@ class Sessao extends ChangeNotifier {
     if (servidores.isEmpty && atual.isNotEmpty) {
       servidores = [Servidor(nomeSugerido(atual), atual)];
       await _salvarServidores();
+    }
+    // Uma vez só: acrescenta os endereços padrão que faltam (se o policial apagar um depois, não volta).
+    if (usarEnderecosPadrao && await Nativo.ler('enderecos_padrao') != '1') {
+      for (final (nome, endereco) in enderecosPadrao) {
+        if (!servidores.any((s) => s.endereco == endereco)) servidores.add(Servidor(nome, endereco));
+      }
+      await _salvarServidores();
+      await Nativo.gravar('enderecos_padrao', '1');
     }
     api.servidor = servidores.any((s) => s.endereco == atual) ? atual : (servidores.isEmpty ? '' : servidores.first.endereco);
   }

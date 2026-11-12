@@ -271,4 +271,11 @@ void main() {
     expect(find.textContaining('Fuzil IA2'), findsOneWidget);
     expect(find.text('Escala extra do feriado'), findsOneWidget);
   });
+
+  testWidgets('primeira abertura já traz os endereços do Wi-Fi e do 4G', (tester) async {
+    final sessao = await abrirApp(tester, servidores: const [], padroes: true);
+    expect(sessao.servidores.map((s) => s.endereco), ['https://sigafape.8bpm.internal', 'https://sigafape.ide-pirarucu.ts.net:8443']);
+    expect(sessao.semConexao, isFalse);
+    expect(find.widgetWithText(TextField, 'Usuário ou matrícula'), findsOneWidget);
+  });
 }
