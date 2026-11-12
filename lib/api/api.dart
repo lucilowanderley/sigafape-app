@@ -95,8 +95,16 @@ class Api {
   Future<Map<String, dynamic>> delete(String caminho) =>
       _enviar(() => _cliente.delete(_uri(caminho), headers: _cabecalhos));
 
+  /// Endereço vindo do servidor (ex.: anexo) apontado para o servidor em uso: o servidor pode montar o link
+  /// com o nome interno dele (atrás do CloudPanel), que o celular não alcança ou cujo certificado não confere.
+  String noServidor(String url) {
+    final i = url.indexOf('/api/');
+    return i < 0 || url.startsWith(servidor) ? url : '$servidor${url.substring(i)}';
+  }
+
   /// Baixa um arquivo (anexo de alerta) com o token do aparelho.
   Future<(Uint8List, String?)> baixar(String url) async {
+    url = noServidor(url);
     final r = await _rede(() => _cliente.get(Uri.parse(url), headers: {if (token != null) 'Authorization': 'Bearer $token'}));
     if (r.statusCode != 200) _erro(r);
     return (r.bodyBytes, r.headers['content-type']);

@@ -7,7 +7,7 @@ import 'api/api.dart';
 import 'tema.dart';
 import 'util/nativo.dart';
 
-const versaoApp = '1.4.1';
+const versaoApp = '1.4.2';
 
 /// Endereço padrão do sistema; pode vir na compilação: --dart-define=SERVIDOR=https://...
 const servidorPadrao = String.fromEnvironment('SERVIDOR', defaultValue: bool.fromEnvironment('DEMO') ? 'https://demonstracao.sigafape' : '');

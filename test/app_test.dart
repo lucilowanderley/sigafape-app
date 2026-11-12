@@ -10,6 +10,13 @@ import 'package:sigafape_app/util/nativo.dart';
 import 'ajuda.dart';
 
 void main() {
+  test('anexo usa o servidor em uso, não o nome interno que o servidor mandou', () {
+    final api = Api(servidor: 'https://sigafape.ide-pirarucu.ts.net:8443');
+    expect(api.noServidor('https://127.0.0.1/api/v1/alertas/anexos/5'), 'https://sigafape.ide-pirarucu.ts.net:8443/api/v1/alertas/anexos/5');
+    expect(api.noServidor('https://sigafape.ide-pirarucu.ts.net:8443/api/v1/foto?v=1'), 'https://sigafape.ide-pirarucu.ts.net:8443/api/v1/foto?v=1');
+    expect(api.noServidor('https://outro.site/arquivo.pdf'), 'https://outro.site/arquivo.pdf');
+  });
+
   testWidgets('senha errada mostra o erro e não entra', (tester) async {
     await abrirApp(tester);
     await entrar(tester, senha: 'errada');
