@@ -10,6 +10,7 @@ import 'cautela.dart';
 import 'conferir.dart';
 import 'inspecoes.dart';
 import 'ocorrencias.dart';
+import 'diarias.dart';
 import 'reserva.dart';
 
 /// Tela inicial (opção A): cartão do policial e atalhos em grade, como o "Meu painel" da web.
@@ -107,6 +108,7 @@ class _TelaPainelState extends State<TelaPainel> {
     final alertas = lista('alertas_pendentes');
     final avisos = ((d['avisos_nao_lidos'] as num?) ?? 0).toInt();
     final diarias = d['diarias'] as Map<String, dynamic>?;
+    final resumoDiarias = diarias?['resumo'] as Map?;
     final viatura = d['viatura_em_uso'] as Map<String, dynamic>?;
     final urgentes = alertas.where((a) => a['prioridade'] == 'urgente' || a['prioridade'] == 'urgentissima').length;
 
@@ -194,10 +196,14 @@ class _TelaPainelState extends State<TelaPainel> {
         _Atalho(
           const Color(0xFF7A5BD0),
           Icons.sell_outlined,
-          'DIÁRIAS DO MÊS',
-          '${diarias['no_mes'] ?? 0}${diarias['limite'] != null ? '/${diarias['limite']}' : ''}',
-          '${(diarias['lista'] as List?)?.length ?? 0} lançamento(s)',
-          () => _abrir(_TelaDiarias(diarias: diarias)),
+          'DIÁRIAS',
+          resumoDiarias != null
+              ? '${resumoDiarias['tirei'] ?? 0} tirei${resumoDiarias['posso_tirar'] != null ? ' · ${resumoDiarias['posso_tirar']} posso' : ''}'
+              : '${diarias['no_mes'] ?? 0}${diarias['limite'] != null ? '/${diarias['limite']}' : ''}',
+          resumoDiarias != null
+              ? '${resumoDiarias['me_cadastrei'] ?? 0} cadastrada(s)\n${resumoDiarias['previstas'] ?? 0} vaga(s) aberta(s)'
+              : '${(diarias['lista'] as List?)?.length ?? 0} lançamento(s)',
+          () => _abrir(TelaDiarias(doPainel: diarias)),
         ),
       _Atalho(const Color(0xFFB8860B), Icons.calculate_outlined, 'FERRAMENTAS', 'Reserva', 'calcular minha data', () => _abrir(const TelaReserva())),
       _Atalho(const Color(0xFF16335F), Icons.badge_outlined, 'MEUS DADOS', 'Ficha', 'consultar', () => widget.irPara(4)),
@@ -445,40 +451,6 @@ class _TelaAgenda extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Text('${dados['servicos_no_mes'] ?? 0} serviço(s) neste mês.', style: TextStyle(color: Cores.de(context).suave)),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TelaDiarias extends StatelessWidget {
-  const _TelaDiarias({required this.diarias});
-  final Map<String, dynamic> diarias;
-
-  @override
-  Widget build(BuildContext context) {
-    final lista = (diarias['lista'] as List?) ?? const [];
-    return Scaffold(
-      appBar: const Topo(titulo: Text('Diárias do mês')),
-      body: ListView(
-        padding: const EdgeInsets.only(top: 12),
-        children: [
-          Cartao(
-            child: Text(
-              '${diarias['no_mes'] ?? 0} diária(s) no mês${diarias['limite'] != null ? ' · limite ${diarias['limite']}' : ''}',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-            ),
-          ),
-          if (lista.isEmpty) const Vazio('Nenhuma diária lançada neste mês.'),
-          for (final g in lista)
-            Cartao(
-              child: Row(
-                children: [
-                  Expanded(child: Text('${dataCurta(g['data'])} · ${g['origem']}\n${g['quantidade']} diária(s)')),
-                  Pilula(g['situacao']?.toString() ?? ''),
-                ],
-              ),
-            ),
         ],
       ),
     );

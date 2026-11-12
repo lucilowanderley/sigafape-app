@@ -179,4 +179,26 @@ void main() {
     Nativo.fotosDeTeste = [];
     Nativo.qrDeTeste = null;
   });
+
+  testWidgets('diarias 1.4.0', (tester) async {
+    celular(tester);
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.ensureVisible(find.text('DIÁRIAS'));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v14-1-inicio-diarias');
+    await tester.tap(find.text('DIÁRIAS'));
+    await esperar(tester);
+    await foto(tester, 'v14-2-vagas');
+    await tester.tap(find.byKey(const Key('agendar-12')));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v14-3-agendar');
+    await tester.tap(find.widgetWithText(FilledButton, 'AGENDAR').last);
+    await esperar(tester);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Minhas diárias'));
+    await esperar(tester);
+    await foto(tester, 'v14-4-minhas');
+  });
 }

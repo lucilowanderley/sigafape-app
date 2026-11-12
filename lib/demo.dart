@@ -27,6 +27,35 @@ http.Client clienteDemo() {
     {'id': 2, 'texto': 'Placa suspeita QGH-2E41, Gol prata', 'criada_em': iso(hoje.subtract(const Duration(minutes: 40)))},
     {'id': 1, 'texto': 'VTR 1-0817 abasteceu, volta 13:40', 'criada_em': iso(hoje.subtract(const Duration(hours: 1)))},
   ];
+  // Diárias: vagas publicadas pelo P/3 e minhas inscrições (limite 10, já tirei 3 no mês)
+  Map<String, dynamic> vagaDemo(int id, int dias, String h, String t, String l, int vagas, int ocupadas) =>
+      {'vaga_id': id, 'data': dia(hoje.add(Duration(days: dias))), 'titulo': t, 'operacao': null, 'horario': h, 'local': l, 'quantidade': 1, 'vagas': vagas, 'livres': vagas - ocupadas, 'observacao': null, 'aberta': true};
+  final vagas = <Map<String, dynamic>>[
+    vagaDemo(11, 2, '07:00–15:00', 'RN Seguro · Reforço', 'Centro · Nova Cruz', 6, 3),
+    vagaDemo(12, 3, '19:00–03:00', 'Operação Feriado Seguro', 'Santo Antônio', 4, 2),
+    vagaDemo(13, 4, '07:00–15:00', 'Complemento de escala', 'DPM de Passagem', 2, 1),
+    vagaDemo(14, 8, '18:00–02:00', 'Ronda Escolar', 'Nova Cruz', 4, 0),
+    vagaDemo(15, 10, '07:00–15:00', 'RN Seguro · Tático Móvel', 'Serrinha', 3, 1),
+  ];
+  var inscricaoId = 70;
+  final inscricoes = <Map<String, dynamic>>[
+    {'id': 61, 'vaga_id': 11, 'situacao': 'inscrita', 'resposta': null},
+    {'id': 60, 'vaga_id': 15, 'situacao': 'confirmada', 'resposta': null},
+  ];
+  const textoSituacao = {'inscrita': 'Aguardando P/3', 'confirmada': 'Confirmada', 'recusada': 'Recusada', 'cancelada': 'Cancelada'};
+  Map<String, dynamic> resumoDiarias() {
+    final ativas = inscricoes.where((i) => i['situacao'] == 'inscrita' || i['situacao'] == 'confirmada').toList();
+    final pendentes = ativas.where((i) => i['situacao'] == 'inscrita').length;
+    final confirmadas = ativas.length - pendentes;
+    return {
+      'previstas': vagas.fold<int>(0, (t, v) => t + (v['livres'] as int)), 'vagas': vagas.length, 'posso_tirar': (10 - 3 - confirmadas - pendentes).clamp(0, 10),
+      'me_cadastrei': ativas.length, 'aguardando': pendentes, 'tirei': 3 + confirmadas, 'limite': 10,
+    };
+  }
+
+  Map<String, dynamic> estadoInscricao(Map i) =>
+      {'id': i['id'], 'situacao': i['situacao'], 'situacao_texto': textoSituacao[i['situacao']], 'resposta': i['resposta'], 'pode_cancelar': i['situacao'] == 'inscrita'};
+
   var pedidoId = 40;
   final pedidos = <Map<String, dynamic>>[
     {'id': 39, 'tipo': 'ocorrencia', 'titulo': 'Furto', 'natureza': 'Furto', 'local': 'Praça da Matriz · Centro', 'situacao': 'aceita', 'situacao_texto': 'Aceita', 'resposta': null,
@@ -128,7 +157,7 @@ http.Client clienteDemo() {
               {'inicio': iso(h19.add(const Duration(days: 3))), 'fim': iso(h19.add(const Duration(days: 3, hours: 12))), 'tipo': 'Operação', 'titulo': 'Operação Feriado Seguro', 'posto': 'Centro', 'funcao': null, 'viatura': null},
             ],
             'servicos_no_mes': 6, 'comigo': comigo(), 'recebimentos_pendentes': recebimentoPendente ? [comigo()[2]] : [], 'reservas': [reserva], 'depositos': [],
-            'diarias': {'no_mes': 3, 'limite': 10, 'lista': [{'data': dia(hoje.subtract(const Duration(days: 5))), 'quantidade': 1, 'origem': 'Operação Feriado Seguro', 'situacao': 'Paga'}]},
+            'diarias': {'resumo': resumoDiarias(), 'no_mes': 3, 'limite': 10, 'lista': [{'data': dia(hoje.subtract(const Duration(days: 5))), 'quantidade': 1, 'origem': 'Operação Feriado Seguro', 'situacao': 'Paga'}]},
             'viatura_em_uso': null, 'convocacoes_inspecao': [inspecao], 'patrimonio': [],
           },
         });
@@ -220,6 +249,21 @@ http.Client clienteDemo() {
         if ((corpo['texto'] ?? '').toString().trim().isEmpty) return json({'message': 'Escreva a anotação.', 'errors': {'texto': ['Escreva a anotação.']}}, 422);
         notas.insert(0, {'id': notaId++, 'texto': corpo['texto'], 'criada_em': iso(DateTime.now())});
         return json({'data': notas}, 201);
+      case ('GET', 'diarias'):
+        final minhas = [
+          for (final i in inscricoes.where((i) => i['situacao'] != 'cancelada'))
+            {'tipo': 'inscricao', ...vagas.firstWhere((v) => v['vaga_id'] == i['vaga_id']), ...estadoInscricao(i)},
+          {'tipo': 'diaria', 'id': 5, 'vaga_id': 0, 'data': dia(hoje.subtract(const Duration(days: 5))), 'titulo': 'Operação Feriado Seguro', 'horario': null, 'local': 'Centro', 'quantidade': 3, 'situacao': 'cumprida', 'situacao_texto': 'Cumprida', 'resposta': null, 'pode_cancelar': false},
+        ]..sort((a, b) => a['data'].toString().compareTo(b['data'].toString()));
+        const nomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        return json({
+          'mes': dia(hoje).substring(0, 7), 'mes_texto': '${nomes[hoje.month - 1]} de ${hoje.year}', 'resumo': resumoDiarias(),
+          'vagas': [
+            for (final v in vagas)
+              {...v, 'minha': inscricoes.where((i) => i['vaga_id'] == v['vaga_id'] && (i['situacao'] == 'inscrita' || i['situacao'] == 'confirmada')).map(estadoInscricao).firstOrNull},
+          ],
+          'minhas': minhas,
+        });
       case ('GET', 'ocorrencias'):
         return json({'data': pedidos, 'naturezas': ['Furto', 'Roubo', 'Ameaça', 'Perturbação do sossego', 'Violência doméstica', 'Lesão corporal', 'Tráfico de drogas', 'Acidente de trânsito']});
       case ('POST', 'ocorrencias'):
@@ -238,6 +282,24 @@ http.Client clienteDemo() {
     if (req.method == 'DELETE' && caminho.startsWith('caderno/')) {
       notas.removeWhere((n) => n['id'].toString() == caminho.split('/')[1]);
       return json({'data': notas});
+    }
+    if (req.method == 'POST' && caminho.startsWith('diarias/vagas/') && caminho.endsWith('/agendar')) {
+      final v = vagas.firstWhere((v) => v['vaga_id'].toString() == caminho.split('/')[2]);
+      if (inscricoes.any((i) => i['vaga_id'] == v['vaga_id'] && (i['situacao'] == 'inscrita' || i['situacao'] == 'confirmada'))) {
+        return json({'message': 'Você já está inscrito nesta vaga.', 'errors': {'vaga': ['Você já está inscrito nesta vaga.']}}, 422);
+      }
+      if ((v['livres'] as int) <= 0) return json({'message': 'As vagas desta diária já foram preenchidas.', 'errors': {'vaga': ['As vagas desta diária já foram preenchidas.']}}, 422);
+      final i = {'id': inscricaoId++, 'vaga_id': v['vaga_id'], 'situacao': 'inscrita', 'resposta': null};
+      inscricoes.add(i);
+      v['livres'] = (v['livres'] as int) - 1;
+      return json({'message': 'Inscrição enviada ao P/3. Você recebe um aviso quando confirmarem.', 'data': {...v, ...estadoInscricao(i)}}, 201);
+    }
+    if (req.method == 'POST' && caminho.startsWith('diarias/inscricoes/') && caminho.endsWith('/cancelar')) {
+      final i = inscricoes.firstWhere((i) => i['id'].toString() == caminho.split('/')[2]);
+      i['situacao'] = 'cancelada';
+      final v = vagas.firstWhere((v) => v['vaga_id'] == i['vaga_id']);
+      v['livres'] = (v['livres'] as int) + 1;
+      return json({'message': 'Inscrição cancelada.'});
     }
     if (req.method == 'POST' && caminho.startsWith('ocorrencias/') && caminho.endsWith('/cancelar')) {
       final p = pedidos.firstWhere((p) => p['id'].toString() == caminho.split('/')[1]);

@@ -293,6 +293,45 @@ void main() {
     Nativo.fotosDeTeste = [];
   });
 
+  testWidgets('diárias: resumo, agendar vaga, aguardando P/3 e cancelar', (tester) async {
+    tester.view.physicalSize = const Size(800, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await abrirApp(tester);
+    await entrar(tester);
+    // Cartão do Início: tirei · posso, cadastradas e vagas abertas
+    expect(find.text('4 tirei · 5 posso'), findsOneWidget);
+    await tester.ensureVisible(find.text('DIÁRIAS'));
+    await tester.tap(find.text('DIÁRIAS'));
+    await esperar(tester);
+    String n(String chave) => (tester.widget<Text>(find.descendant(of: find.byKey(Key('resumo-$chave')), matching: find.byType(Text)).first)).data!;
+    expect(n('previstas'), '12');
+    expect(n('posso'), '5');
+    expect(n('cadastrei'), '2');
+    expect(find.text('Aguardando P/3'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('agendar-12')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'AGENDAR').last);
+    await esperar(tester);
+    expect(find.textContaining('Inscrição enviada ao P/3'), findsOneWidget);
+    expect(find.text('Aguardando P/3'), findsNWidgets(2));
+    expect(n('posso'), '4');
+    expect(n('cadastrei'), '3');
+    expect(n('previstas'), '11');
+
+    await tester.tap(find.text('Minhas diárias'));
+    await esperar(tester);
+    expect(find.text('Cumprida'), findsOneWidget);
+    expect(find.text('Confirmada'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('cancelar-61')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('CANCELAR INSCRIÇÃO'));
+    await esperar(tester);
+    expect(find.text('Inscrição cancelada.'), findsOneWidget);
+    expect(find.text('Aguardando P/3'), findsOneWidget);
+  });
+
   testWidgets('sino do topo mostra o número e notificação nova vira aviso no celular', (tester) async {
     novidadesDeTeste.clear();
     Nativo.avisosDeTeste.clear();
