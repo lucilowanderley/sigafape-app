@@ -11,47 +11,75 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.Base64
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Funções nativas usadas pelo app (canal "sigafape/nativo"), sem plugins de terceiros,
  * para o app rodar a partir do Android 6.0 (API 23):
- * preferências, token guardado com chave do Android Keystore, nome do aparelho, abertura de anexos
- * e localização (GPS) para o pedido de apoio e a abertura de ocorrência.
+ * preferências, token guardado com chave do Android Keystore (Cofre), nome do aparelho, abertura de anexos,
+ * localização (GPS) para o pedido de apoio e a abertura de ocorrência, e avisos na barra do Android.
  */
 class MainActivity : FlutterActivity() {
-    private val prefs by lazy { getSharedPreferences("sigafape", Context.MODE_PRIVATE) }
+    /** Tela pedida ao tocar num aviso da barra do Android (ex.: "alertas"); o app lê uma vez. */
+    private var abrirPedido: String? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        abrirPedido = intent?.getStringExtra(Avisos.EXTRA_ABRIR)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra(Avisos.EXTRA_ABRIR)?.let { abrirPedido = it }
+    }
+
+    private var pedidoAvisos: MethodChannel.Result? = null
+
+    /** Android 13+: pede a permissão de mostrar avisos. Devolve true se puder avisar. */
+    private fun permitirAvisos(result: MethodChannel.Result) {
+        Avisos.criarCanais(this)
+        if (Avisos.permitido(this)) return result.success(true)
+        pedidoAvisos?.success(false)
+        pedidoAvisos = result
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), PEDIDO_AVISOS)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sigafape/nativo").setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
-                    "ler" -> result.success(prefs.getString("p_" + call.argument<String>("chave"), null))
+                    "ler" -> result.success(Cofre.ler(this, call.argument<String>("chave")!!))
                     "gravar" -> {
-                        val chave = "p_" + call.argument<String>("chave")
-                        val valor = call.argument<String>("valor")
-                        prefs.edit().apply { if (valor == null) remove(chave) else putString(chave, valor) }.apply()
+                        Cofre.gravar(this, call.argument<String>("chave")!!, call.argument<String>("valor"))
                         result.success(null)
                     }
-                    "lerSegredo" -> result.success(prefs.getString("s_" + call.argument<String>("chave"), null)?.let { decifrar(it) })
+                    "lerSegredo" -> result.success(Cofre.lerSegredo(this, call.argument<String>("chave")!!))
                     "gravarSegredo" -> {
-                        val chave = "s_" + call.argument<String>("chave")
-                        val valor = call.argument<String>("valor")
-                        prefs.edit().apply { if (valor == null) remove(chave) else putString(chave, cifrar(valor)) }.apply()
+                        Cofre.gravarSegredo(this, call.argument<String>("chave")!!, call.argument<String>("valor"))
                         result.success(null)
+                    }
+                    // Avisos na barra do Android e conferência em segundo plano (item 1 de 2026-11-12)
+                    "avisar" -> {
+                        Avisos.mostrar(this, call.argument<String>("chave")!!, call.argument<String>("titulo") ?: "SIGAFAPE", call.argument<String>("texto") ?: "", call.argument<String>("prioridade"))
+                        result.success(null)
+                    }
+                    "permitirAvisos" -> permitirAvisos(result)
+                    "agendarConferencia" -> {
+                        ConferirNovidades.agendar(this)
+                        result.success(null)
+                    }
+                    "cancelarConferencia" -> {
+                        ConferirNovidades.cancelar(this)
+                        result.success(null)
+                    }
+                    "abrirPedido" -> {
+                        result.success(abrirPedido)
+                        abrirPedido = null
                     }
                     "aparelho" -> result.success("${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
                     "abrirArquivo" -> result.success(abrirArquivo(call.argument<String>("nome")!!, call.argument<ByteArray>("bytes")!!, call.argument<String>("tipo")))
@@ -62,34 +90,6 @@ class MainActivity : FlutterActivity() {
                 result.error("nativo", e.message, null)
             }
         }
-    }
-
-    private fun chave(): SecretKey {
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
-        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        gen.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .build()
-        )
-        return gen.generateKey()
-    }
-
-    private fun cifrar(texto: String): String {
-        val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, chave()) }
-        val dados = c.doFinal(texto.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(c.iv, Base64.NO_WRAP) + ":" + Base64.encodeToString(dados, Base64.NO_WRAP)
-    }
-
-    /** Devolve null se não der para decifrar (ex.: chave apagada após restaurar backup): o app pede login de novo. */
-    private fun decifrar(guardado: String): String? = try {
-        val (iv, dados) = guardado.split(":").map { Base64.decode(it, Base64.NO_WRAP) }
-        val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, chave(), GCMParameterSpec(128, iv)) }
-        String(c.doFinal(dados), Charsets.UTF_8)
-    } catch (e: Exception) {
-        null
     }
 
     private fun abrirArquivo(nome: String, bytes: ByteArray, tipo: String?): Boolean {
@@ -127,6 +127,11 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PEDIDO_AVISOS) {
+            pedidoAvisos?.success(Avisos.permitido(this))
+            pedidoAvisos = null
+            return
+        }
         if (requestCode != PEDIDO_LOCAL) return
         val r = pedidoLocal ?: return
         pedidoLocal = null
@@ -172,7 +177,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
-        private const val ALIAS = "sigafape_token"
         private const val PEDIDO_LOCAL = 4190
+        private const val PEDIDO_AVISOS = 4191
     }
 }

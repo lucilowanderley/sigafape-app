@@ -271,6 +271,8 @@ class Sessao extends ChangeNotifier {
   }
 
   Future<void> _limpar() async {
+    await Nativo.desligarAvisos();
+    await Nativo.gravar('vistos', null);
     api.token = null;
     usuario = null;
     foto = null;

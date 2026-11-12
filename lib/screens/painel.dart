@@ -4,6 +4,7 @@ import '../api/api.dart';
 import '../tema.dart';
 import '../util/formato.dart';
 import '../widgets/comum.dart';
+import 'alertas.dart';
 import 'caderno.dart';
 import 'cautela.dart';
 import 'inspecoes.dart';
@@ -11,9 +12,12 @@ import 'ocorrencias.dart';
 
 /// Tela inicial (opção A): cartão do policial e atalhos em grade, como o "Meu painel" da web.
 class TelaPainel extends StatefulWidget {
-  const TelaPainel({super.key, required this.irPara, required this.aoAtualizar});
+  const TelaPainel({super.key, required this.irPara, required this.aoAtualizar, this.sino = 0});
   final void Function(int aba) irPara;
   final VoidCallback aoAtualizar;
+
+  /// Notificações pendentes + avisos não lidos (número no sino do topo).
+  final int sino;
 
   @override
   State<TelaPainel> createState() => _TelaPainelState();
@@ -57,7 +61,15 @@ class _TelaPainelState extends State<TelaPainel> {
             icon: const Icon(Icons.edit_note),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TelaCaderno())),
           ),
-          IconButton(tooltip: 'Alertas', icon: const Icon(Icons.notifications_outlined), onPressed: () => widget.irPara(3)),
+          IconButton(
+            tooltip: 'Alertas',
+            icon: Badge(
+              isLabelVisible: widget.sino > 0,
+              label: Text(widget.sino > 99 ? '99+' : '${widget.sino}'),
+              child: Icon(widget.sino > 0 ? Icons.notifications_active : Icons.notifications_outlined),
+            ),
+            onPressed: () => widget.irPara(3),
+          ),
         ],
       ),
       body: Carregar<Map<String, dynamic>>(key: _chave, buscar: _buscar, construir: (context, d) => _conteudo(context, d)),
@@ -91,7 +103,21 @@ class _TelaPainelState extends State<TelaPainel> {
     final viatura = d['viatura_em_uso'] as Map<String, dynamic>?;
     final urgentes = alertas.where((a) => a['prioridade'] == 'urgente' || a['prioridade'] == 'urgentissima').length;
 
-    String servicoDetalhe(Map<String, dynamic> s) => [s['titulo'] ?? s['tipo'], s['viatura'] != null ? 'VTR ${s['viatura']}' : null].where((e) => e != null && e.toString().isNotEmpty).join(' · ');
+    // Meu serviço: "Em serviço" (agora), "Escalado" (próximo serviço) ou "Sem escala"; período e função.
+    String funcao(Map<String, dynamic> s) => [s['funcao'], s['titulo'] ?? s['tipo']].firstWhere((e) => e != null && e.toString().isNotEmpty, orElse: () => '').toString();
+    String periodo(Map<String, dynamic> s) => '${quandoCurto(s['inicio'])}–${hora(s['fim'])}';
+    String servicoDetalhe(Map<String, dynamic> s) =>
+        [agora != null ? 'até ${hora(s['fim'])}' : periodo(s), funcao(s)].where((e) => e.isNotEmpty).join(' · ');
+
+    // Assinar: tudo que espera a minha assinatura (recebimento de cautela + ciência de notificação).
+    final assinaturas = d['assinaturas'] as Map<String, dynamic>?;
+    final assinarCautelas = ((assinaturas?['cautelas'] as num?) ?? pendentes.length).toInt();
+    final assinarNotificacoes = ((assinaturas?['notificacoes'] as num?) ?? 0).toInt();
+    final assinarTotal = ((assinaturas?['total'] as num?) ?? assinarCautelas + assinarNotificacoes).toInt();
+    String plural(int n, String um, String varios) => '$n ${n == 1 ? um : varios}';
+    final assinarDetalhe = assinarTotal == 0
+        ? 'nada pendente'
+        : [if (assinarCautelas > 0) plural(assinarCautelas, 'cautela', 'cautelas'), if (assinarNotificacoes > 0) plural(assinarNotificacoes, 'notificação', 'notificações')].join(' · ');
 
     final ocorrencias = (d['_ocorrencias'] as List?)?.cast<Map<String, dynamic>>();
     final aguardando = ocorrencias?.where((o) => o['situacao'] == 'pendente').length ?? 0;
@@ -120,8 +146,8 @@ class _TelaPainelState extends State<TelaPainel> {
         const Color(0xFF1F5FB4),
         Icons.calendar_month_outlined,
         'MEU SERVIÇO',
-        servico == null ? 'Sem escala' : (agora != null ? 'Agora' : quandoCurto(servico['inicio'])),
-        servico == null ? '${d['servicos_no_mes'] ?? 0} no mês' : servicoDetalhe(servico),
+        servico == null ? 'Sem escala' : (agora != null ? 'Em serviço' : 'Escalado'),
+        servico == null ? '${d['servicos_no_mes'] ?? 0} serviço(s) no mês' : servicoDetalhe(servico),
         () => _abrir(_TelaAgenda(dados: d)),
       ),
       _Atalho(const Color(0xFF1D8A45), Icons.inventory_2_outlined, 'COMIGO AGORA', '${comigo.length}', comigo.length == 1 ? 'material' : 'materiais', () => widget.irPara(1)),
@@ -137,9 +163,9 @@ class _TelaPainelState extends State<TelaPainel> {
         const Color(0xFFC0392B),
         Icons.draw_outlined,
         'ASSINAR',
-        '${pendentes.length}',
-        pendentes.isEmpty ? 'nada pendente' : 'recebimento pendente',
-        pendentes.isEmpty ? () => widget.irPara(1) : () => _abrir(TelaCautela(id: pendentes.first['id'] as int)),
+        '$assinarTotal',
+        assinarDetalhe,
+        () => _abrir(TelaAssinaturas(cautelas: pendentes.cast<Map<String, dynamic>>())),
       ),
       _Atalho(
         const Color(0xFFB8860B),
@@ -446,6 +472,87 @@ class _TelaDiarias extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Tudo que espera a minha assinatura: recebimento de cautela de urgência e ciência assinada de notificação.
+class TelaAssinaturas extends StatefulWidget {
+  const TelaAssinaturas({super.key, required this.cautelas});
+  final List<Map<String, dynamic>> cautelas;
+
+  @override
+  State<TelaAssinaturas> createState() => _TelaAssinaturasState();
+}
+
+class _TelaAssinaturasState extends State<TelaAssinaturas> {
+  final _chave = GlobalKey<CarregarState<(List<Map<String, dynamic>>, List<Map<String, dynamic>>)>>();
+
+  Future<(List<Map<String, dynamic>>, List<Map<String, dynamic>>)> _buscar() async {
+    final api = apiDe(context);
+    final r = await Future.wait([api.get('painel'), api.get('alertas', {'por_pagina': 100})]);
+    final cautelas = (((r[0]['data'] as Map?)?['recebimentos_pendentes'] as List?) ?? widget.cautelas).cast<Map<String, dynamic>>();
+    final notificacoes = ((r[1]['data'] as List?) ?? const []).cast<Map<String, dynamic>>().where((a) => a['pendente'] == true && a['exige_assinatura'] == true).toList();
+    return (cautelas, notificacoes);
+  }
+
+  Future<void> _abrir(Widget tela) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => tela));
+    _chave.currentState?.recarregar();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Cores.de(context);
+    return Scaffold(
+      appBar: const Topo(titulo: Text('Assinaturas pendentes')),
+      body: Carregar<(List<Map<String, dynamic>>, List<Map<String, dynamic>>)>(
+        key: _chave,
+        buscar: _buscar,
+        construir: (context, d) {
+          final (cautelas, notificacoes) = d;
+          return ListView(
+            padding: const EdgeInsets.only(bottom: 16),
+            children: [
+              if (cautelas.isEmpty && notificacoes.isEmpty) const Vazio('Nenhuma assinatura pendente.', icone: Icons.task_alt),
+              if (cautelas.isNotEmpty) TituloSecao('Recebimento de cautela (${cautelas.length})'),
+              for (final l in cautelas)
+                Cartao(
+                  bordaEsquerda: const Color(0xFFC0392B),
+                  aoTocar: () => _abrir(TelaCautela(id: l['id'] as int)),
+                  child: Row(children: [
+                    const Icon(Icons.inventory_2_outlined),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text('${l['material'] ?? ''} · ${l['numero_serie'] ?? ''}\n${l['motivo_urgencia'] ?? 'Cautela de urgência'}',
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                    Icon(Icons.chevron_right, color: c.suave),
+                  ]),
+                ),
+              if (notificacoes.isNotEmpty) TituloSecao('Ciência de notificação (${notificacoes.length})'),
+              for (final a in notificacoes)
+                Cartao(
+                  bordaEsquerda: corPrioridade(a['prioridade']?.toString()),
+                  aoTocar: () => _abrir(TelaAlerta(id: a['id'] as int)),
+                  child: Row(children: [
+                    Icon(Icons.notifications_outlined, color: corPrioridade(a['prioridade']?.toString())),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('${(a['prioridade_texto'] ?? '').toString().toUpperCase()} · ${a['remetente'] ?? ''}',
+                            style: TextStyle(color: corPrioridade(a['prioridade']?.toString()), fontSize: 11.5, fontWeight: FontWeight.w800)),
+                        Text(a['assunto']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        if (a['prazo_ciencia'] != null) Text('Prazo: ${dataHora(a['prazo_ciencia'])}', style: TextStyle(color: c.suave, fontSize: 12.5)),
+                      ]),
+                    ),
+                    Icon(Icons.chevron_right, color: c.suave),
+                  ]),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

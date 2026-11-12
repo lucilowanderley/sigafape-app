@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sigafape_app/api/api.dart';
+import 'package:sigafape_app/demo.dart';
 import 'package:sigafape_app/sessao.dart';
 import 'package:sigafape_app/tema.dart';
 import 'package:sigafape_app/util/nativo.dart';
@@ -236,5 +237,38 @@ void main() {
     await esperar(tester);
     expect(find.text('Aguardando o COPOM'), findsOneWidget);
     expect(find.textContaining('Motivo: já atendida'), findsOneWidget);
+  });
+
+  testWidgets('sino do topo mostra o número e notificação nova vira aviso no celular', (tester) async {
+    novidadesDeTeste.clear();
+    Nativo.avisosDeTeste.clear();
+    await abrirApp(tester);
+    await entrar(tester);
+    // 1 notificação urgente + 1 aviso do sino; os que já existiam ao entrar não viram aviso na barra
+    final sino = find.descendant(of: find.widgetWithIcon(IconButton, Icons.notifications_active), matching: find.text('2'));
+    expect(sino, findsOneWidget);
+    expect(Nativo.avisosDeTeste, isEmpty);
+
+    novidadesDeTeste.add({'chave': 'alerta-77', 'tipo': 'alerta', 'titulo': 'URGENTE · Reunião às 14h', 'texto': 'De P/3', 'prioridade': 'urgente', 'em': null});
+    await aba(tester, 'Reservas'); // trocar de aba confere de novo
+    expect(Nativo.avisosDeTeste, ['URGENTE · Reunião às 14h']);
+    await aba(tester, 'Material');
+    expect(Nativo.avisosDeTeste, hasLength(1)); // não avisa duas vezes
+    await aba(tester, 'Início');
+    expect(find.descendant(of: find.widgetWithIcon(IconButton, Icons.notifications_active), matching: find.text('3')), findsOneWidget);
+    novidadesDeTeste.clear();
+  });
+
+  testWidgets('Meu serviço diz se está escalado e Assinar soma cautelas e notificações', (tester) async {
+    await abrirApp(tester);
+    await entrar(tester);
+    expect(find.text('Escalado'), findsOneWidget);
+    expect(find.textContaining('· Motorista'), findsOneWidget);
+    expect(find.text('1 cautela · 1 notificação'), findsOneWidget);
+    await tester.tap(find.text('ASSINAR'));
+    await esperar(tester);
+    expect(find.text('Assinaturas pendentes'), findsOneWidget);
+    expect(find.textContaining('Fuzil IA2'), findsOneWidget);
+    expect(find.text('Escala extra do feriado'), findsOneWidget);
   });
 }

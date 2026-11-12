@@ -51,6 +51,48 @@ class Nativo {
     return await _canal.invokeMethod<bool>('abrirArquivo', {'nome': nome, 'bytes': bytes, 'tipo': tipo}) ?? false;
   }
 
+  /// Avisos mostrados nos testes (o canal nativo não existe lá).
+  static final List<String> avisosDeTeste = [];
+
+  /// Mostra um aviso na barra do celular (som/vibração; urgente aparece por cima da tela).
+  static Future<void> avisar(String chave, String titulo, String texto, String? prioridade) async {
+    if (semCanal) {
+      avisosDeTeste.add(titulo);
+      return;
+    }
+    try {
+      await _canal.invokeMethod('avisar', {'chave': chave, 'titulo': titulo, 'texto': texto, 'prioridade': prioridade});
+    } catch (_) {}
+  }
+
+  /// Android 13+: pede a permissão de avisos. Também agenda a conferência em segundo plano (a cada 15 min).
+  static Future<void> ligarAvisos() async {
+    if (semCanal) return;
+    try {
+      await _canal.invokeMethod('permitirAvisos');
+      await _canal.invokeMethod('agendarConferencia');
+    } catch (_) {
+      // iPhone ainda sem conferência em segundo plano.
+    }
+  }
+
+  static Future<void> desligarAvisos() async {
+    if (semCanal) return;
+    try {
+      await _canal.invokeMethod('cancelarConferencia');
+    } catch (_) {}
+  }
+
+  /// Tela pedida ao tocar num aviso da barra (ex.: "alertas"), uma vez só.
+  static Future<String?> abrirPedido() async {
+    if (semCanal) return null;
+    try {
+      return await _canal.invokeMethod<String>('abrirPedido');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Posição de teste (testes e modo demonstração no computador).
   static Local? localDeTeste = const Local(-5.79448, -35.21100, 9);
 

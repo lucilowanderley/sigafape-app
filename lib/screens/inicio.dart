@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../novidades.dart';
+import '../util/nativo.dart';
 import '../widgets/comum.dart';
 import 'alertas.dart';
 import 'eu.dart';
@@ -19,15 +21,18 @@ class TelaInicio extends StatefulWidget {
 
 class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
   int _aba = 0;
-  int _pendentes = 0;
+  Contagem _contagem = const Contagem();
   Timer? _relogio;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    Nativo.ligarAvisos();
     _contar();
-    _relogio = Timer.periodic(const Duration(minutes: 2), (_) => _contar());
+    _abrirPedido();
+    // Com o app aberto confere a cada minuto; fechado, o Android confere a cada 15 minutos.
+    _relogio = Timer.periodic(const Duration(minutes: 1), (_) => _contar());
   }
 
   @override
@@ -39,24 +44,33 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _contar();
+    if (state == AppLifecycleState.resumed) {
+      _contar();
+      _abrirPedido();
+    }
   }
 
-  /// Número no ícone de Alertas: notificações pendentes + avisos do sino não lidos.
+  /// Número no sino (topo do Início e aba Alertas): notificações pendentes + avisos do sino não lidos.
+  /// Também mostra na barra do celular o que chegou de novo.
   Future<void> _contar() async {
     try {
-      final api = apiDe(context);
-      final r = await Future.wait([api.get('alertas', {'por_pagina': 1}), api.get('avisos')]);
-      if (mounted) setState(() => _pendentes = ((r[0]['pendentes'] as num?) ?? 0).toInt() + ((r[1]['nao_lidos'] as num?) ?? 0).toInt());
+      final c = await conferirNovidades(apiDe(context));
+      if (mounted) setState(() => _contagem = c);
     } catch (_) {}
+  }
+
+  /// Tocou num aviso da barra do Android: abre a aba Alertas.
+  Future<void> _abrirPedido() async {
+    if (await Nativo.abrirPedido() == 'alertas' && mounted) _irPara(3);
   }
 
   void _irPara(int aba) => setState(() => _aba = aba);
 
   @override
   Widget build(BuildContext context) {
+    final pendentes = _contagem.sino;
     final telas = [
-      TelaPainel(irPara: _irPara, aoAtualizar: _contar),
+      TelaPainel(irPara: _irPara, aoAtualizar: _contar, sino: _contagem.sino),
       const TelaMaterial(),
       const TelaReservas(),
       TelaAlertas(aoMudar: _contar),
@@ -75,8 +89,8 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
           const NavigationDestination(icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2), label: 'Material'),
           const NavigationDestination(icon: Icon(Icons.event_outlined), selectedIcon: Icon(Icons.event), label: 'Reservas'),
           NavigationDestination(
-            icon: Badge(isLabelVisible: _pendentes > 0, label: Text('$_pendentes'), child: const Icon(Icons.notifications_outlined)),
-            selectedIcon: Badge(isLabelVisible: _pendentes > 0, label: Text('$_pendentes'), child: const Icon(Icons.notifications)),
+            icon: Badge(isLabelVisible: pendentes > 0, label: Text('$pendentes'), child: const Icon(Icons.notifications_outlined)),
+            selectedIcon: Badge(isLabelVisible: pendentes > 0, label: Text('$pendentes'), child: const Icon(Icons.notifications)),
             label: 'Alertas',
           ),
           const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Eu'),

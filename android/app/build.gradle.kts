@@ -67,4 +67,6 @@ flutter {
 dependencies {
     // FileProvider, para abrir os anexos dos alertas em outro app
     implementation("androidx.core:core:1.13.1")
+    // Conferência de novas notificações em segundo plano (a cada 15 min, mesmo com o app fechado)
+    implementation("androidx.work:work-runtime:2.9.1")
 }

@@ -7,6 +7,9 @@ import 'package:http/testing.dart';
 /// Login: qualquer usuário com a senha "demo". Assinaturas: matrícula 215.347-8 e senha "demo".
 const modoDemo = bool.fromEnvironment('DEMO');
 
+/// Itens extras de /novidades (testes: "chegou uma notificação nova").
+final novidadesDeTeste = <Map<String, dynamic>>[];
+
 /// Endereços que a demonstração trata como fora do ar (testes e prints da tela Sem conexão).
 final hostsForaDoAr = <String>{};
 
@@ -105,6 +108,7 @@ http.Client clienteDemo() {
         return json({
           'data': {
             'usuario': usuario, 'vinculado': true, 'alertas_pendentes': alertaPendente ? [alerta()] : [], 'avisos_nao_lidos': avisos,
+            'assinaturas': {'total': (recebimentoPendente ? 1 : 0) + (alertaPendente ? 1 : 0), 'cautelas': recebimentoPendente ? 1 : 0, 'notificacoes': alertaPendente ? 1 : 0},
             'servico_agora': null,
             'proximo_servico': {'inicio': iso(h19), 'fim': iso(h19.add(const Duration(hours: 12))), 'tipo': 'Escala', 'titulo': 'Patrulha', 'posto': 'Setor 2', 'funcao': 'Motorista', 'viatura': '8-1234'},
             'agenda': [
@@ -143,6 +147,20 @@ http.Client clienteDemo() {
         if (erro != null) return erro;
         alertaPendente = false;
         return json({'message': 'Ciência assinada.', 'codigo': 'F00D-CAFE-1234-5678', 'data': alerta()});
+      case ('GET', 'novidades'):
+        final itens = [
+          if (alertaPendente) {'chave': 'alerta-55', 'tipo': 'alerta', 'titulo': 'URGENTE · Escala extra do feriado', 'texto': 'De P/1 · 8º BPM · ciência assinada', 'prioridade': 'urgente', 'em': iso(hoje)},
+          if (avisos > 0) {'chave': 'aviso-a1', 'tipo': 'aviso', 'titulo': 'Cautela de urgência', 'texto': 'Assine o recebimento do Fuzil IA2.', 'prioridade': 'normal', 'em': iso(hoje)},
+          ...novidadesDeTeste,
+        ];
+        final assinar = (recebimentoPendente ? 1 : 0) + (alertaPendente ? 1 : 0);
+        return json({
+          'alertas_pendentes': (alertaPendente ? 1 : 0) + novidadesDeTeste.where((i) => i['tipo'] == 'alerta').length,
+          'avisos_nao_lidos': avisos,
+          'assinaturas_pendentes': assinar,
+          'assinaturas': {'total': assinar, 'cautelas': recebimentoPendente ? 1 : 0, 'notificacoes': alertaPendente ? 1 : 0},
+          'itens': itens,
+        });
       case ('GET', 'avisos'):
         return json({
           'data': avisos == 0 && req.url.queryParameters['todas'] == null
