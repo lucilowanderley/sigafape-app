@@ -28,7 +28,7 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Nativo.ligarAvisos();
+    _ligarServicos();
     _contar();
     _abrirPedido();
     // Com o app aberto confere a cada minuto; fechado, o Android confere a cada 15 minutos.
@@ -57,6 +57,22 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
       final c = await conferirNovidades(apiDe(context));
       if (mounted) setState(() => _contagem = c);
     } catch (_) {}
+  }
+
+  /// Avisos do Android e, se o sistema usa, o envio da posição em segundo plano (um pedido de permissão por vez).
+  Future<void> _ligarServicos() async {
+    final api = apiDe(context);
+    await Nativo.ligarAvisos();
+    try {
+      final r = await api.get('posicao');
+      if (r['ativo'] == true) {
+        await Nativo.ligarLocalizacao();
+      } else {
+        await Nativo.desligarLocalizacao();
+      }
+    } catch (_) {
+      // Servidor ainda sem /posicao, ou sem rede: tenta na próxima abertura.
+    }
   }
 
   /// Tocou num aviso da barra do Android: abre a aba Alertas.

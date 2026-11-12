@@ -37,6 +37,30 @@ class MainActivity : FlutterActivity() {
         intent.getStringExtra(Avisos.EXTRA_ABRIR)?.let { abrirPedido = it }
     }
 
+    private var pedidoServico: MethodChannel.Result? = null
+
+    /**
+     * Liga o envio da posição em segundo plano: pede a permissão de localização (se faltar) e, uma vez só,
+     * a opção "Permitir o tempo todo" (Android 10+), para o envio voltar sozinho depois de reiniciar o celular.
+     */
+    private fun ligarLocalizacao(result: MethodChannel.Result) {
+        if (temPermissao()) {
+            LocalizacaoServico.ligar(this)
+            pedirTempoTodo()
+            return result.success(true)
+        }
+        pedidoServico?.success(false)
+        pedidoServico = result
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), PEDIDO_SERVICO)
+    }
+
+    private fun pedirTempoTodo() {
+        if (Build.VERSION.SDK_INT < 29 || Cofre.ler(this, "pediu_tempo_todo") == "1") return
+        if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) return
+        Cofre.gravar(this, "pediu_tempo_todo", "1")
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), PEDIDO_TEMPO_TODO)
+    }
+
     private var pedidoAvisos: MethodChannel.Result? = null
 
     /** Android 13+: pede a permissão de mostrar avisos. Devolve true se puder avisar. */
@@ -75,6 +99,11 @@ class MainActivity : FlutterActivity() {
                     }
                     "cancelarConferencia" -> {
                         ConferirNovidades.cancelar(this)
+                        result.success(null)
+                    }
+                    "ligarLocalizacao" -> ligarLocalizacao(result)
+                    "desligarLocalizacao" -> {
+                        LocalizacaoServico.desligar(this)
                         result.success(null)
                     }
                     "abrirPedido" -> {
@@ -127,6 +156,17 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PEDIDO_SERVICO) {
+            val r = pedidoServico
+            pedidoServico = null
+            if (temPermissao()) {
+                LocalizacaoServico.ligar(this)
+                pedirTempoTodo()
+            }
+            r?.success(temPermissao())
+            return
+        }
+        if (requestCode == PEDIDO_TEMPO_TODO) return
         if (requestCode == PEDIDO_AVISOS) {
             pedidoAvisos?.success(Avisos.permitido(this))
             pedidoAvisos = null
@@ -179,5 +219,7 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val PEDIDO_LOCAL = 4190
         private const val PEDIDO_AVISOS = 4191
+        private const val PEDIDO_SERVICO = 4193
+        private const val PEDIDO_TEMPO_TODO = 4194
     }
 }

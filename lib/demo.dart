@@ -147,6 +147,10 @@ http.Client clienteDemo() {
         if (erro != null) return erro;
         alertaPendente = false;
         return json({'message': 'Ciência assinada.', 'codigo': 'F00D-CAFE-1234-5678', 'data': alerta()});
+      case ('GET', 'posicao'):
+        return json({'ativo': true, 'intervalo_minutos': 5, 'pedido': false});
+      case ('POST', 'posicao'):
+        return json({'ativo': true, 'intervalo_minutos': 5, 'pedido': false, 'message': 'Posição recebida.'});
       case ('GET', 'novidades'):
         final itens = [
           if (alertaPendente) {'chave': 'alerta-55', 'tipo': 'alerta', 'titulo': 'URGENTE · Escala extra do feriado', 'texto': 'De P/1 · 8º BPM · ciência assinada', 'prioridade': 'urgente', 'em': iso(hoje)},

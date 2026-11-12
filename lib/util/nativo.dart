@@ -83,6 +83,29 @@ class Nativo {
     } catch (_) {}
   }
 
+  /// Localização em segundo plano (aviso fixo na barra do Android). Pede a permissão se faltar.
+  static bool localizacaoLigadaNoTeste = false;
+
+  static Future<void> ligarLocalizacao() async {
+    if (semCanal) {
+      localizacaoLigadaNoTeste = true;
+      return;
+    }
+    try {
+      await _canal.invokeMethod('ligarLocalizacao');
+    } catch (_) {}
+  }
+
+  static Future<void> desligarLocalizacao() async {
+    if (semCanal) {
+      localizacaoLigadaNoTeste = false;
+      return;
+    }
+    try {
+      await _canal.invokeMethod('desligarLocalizacao');
+    } catch (_) {}
+  }
+
   /// Tela pedida ao tocar num aviso da barra (ex.: "alertas"), uma vez só.
   static Future<String?> abrirPedido() async {
     if (semCanal) return null;

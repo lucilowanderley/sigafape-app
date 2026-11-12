@@ -248,6 +248,7 @@ void main() {
     final sino = find.descendant(of: find.widgetWithIcon(IconButton, Icons.notifications_active), matching: find.text('2'));
     expect(sino, findsOneWidget);
     expect(Nativo.avisosDeTeste, isEmpty);
+    expect(Nativo.localizacaoLigadaNoTeste, isTrue); // sistema com localização ligada
 
     novidadesDeTeste.add({'chave': 'alerta-77', 'tipo': 'alerta', 'titulo': 'URGENTE · Reunião às 14h', 'texto': 'De P/3', 'prioridade': 'urgente', 'em': null});
     await aba(tester, 'Reservas'); // trocar de aba confere de novo

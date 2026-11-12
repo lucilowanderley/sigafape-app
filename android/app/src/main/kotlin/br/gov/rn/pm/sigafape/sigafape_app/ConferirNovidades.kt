@@ -10,16 +10,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.KeyStore
-import java.security.cert.CertificateFactory
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.X509TrustManager
 
 /**
  * Conferência em segundo plano (app fechado): a cada 15 minutos, com internet, pergunta ao servidor
@@ -32,7 +23,7 @@ class ConferirNovidades(ctx: Context, params: WorkerParameters) : Worker(ctx, pa
         val ctx = applicationContext
         val token = Cofre.lerSegredo(ctx, "token") ?: return Result.success()
         for (base in enderecos(ctx)) {
-            val json = try { buscar(ctx, "$base/api/v1/novidades", token) } catch (e: Exception) { null } ?: continue
+            val json = try { Rede.pedir(ctx, "GET", "$base/api/v1/novidades", token) } catch (e: Exception) { null } ?: continue
             if (json.optInt("_status") == 401) return Result.success() // sessão expirada: o app pede login ao abrir
             avisarNovos(ctx, json)
             return Result.success()
@@ -92,53 +83,6 @@ class ConferirNovidades(ctx: Context, params: WorkerParameters) : Worker(ctx, pa
                 }
             }
             Cofre.gravar(ctx, "vistos", atuais.toString())
-        }
-
-        private fun buscar(ctx: Context, url: String, token: String): JSONObject? {
-            val con = URL(url).openConnection() as HttpURLConnection
-            if (con is HttpsURLConnection) caPropria(ctx)?.let { con.sslSocketFactory = it.socketFactory }
-            con.connectTimeout = 15000
-            con.readTimeout = 20000
-            con.setRequestProperty("Accept", "application/json")
-            con.setRequestProperty("Authorization", "Bearer $token")
-            return try {
-                val codigo = con.responseCode
-                if (codigo == 401) return JSONObject().put("_status", 401)
-                if (codigo !in 200..299) return null
-                JSONObject(con.inputStream.bufferedReader().use { it.readText() })
-            } finally {
-                con.disconnect()
-            }
-        }
-
-        private var contexto: SSLContext? = null
-        private var semCa = false
-
-        /** Confia nas CAs do Android e também na CA própria da rede interna (assets/certs/ca.pem), se existir. */
-        private fun caPropria(ctx: Context): SSLContext? {
-            if (semCa) return null
-            contexto?.let { return it }
-            return try {
-                val pem = ctx.assets.open("flutter_assets/assets/certs/ca.pem").use { it.readBytes() }
-                if (pem.size < 100) { semCa = true; return null }
-                val ks = KeyStore.getInstance(KeyStore.getDefaultType()).apply { load(null) }
-                CertificateFactory.getInstance("X.509").generateCertificates(ByteArrayInputStream(pem)).forEachIndexed { i, c -> ks.setCertificateEntry("ca$i", c) }
-                val sistema = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(null as KeyStore?) }
-                    .trustManagers.filterIsInstance<X509TrustManager>().first()
-                val propria = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(ks) }
-                    .trustManagers.filterIsInstance<X509TrustManager>().first()
-                val ambos = object : X509TrustManager {
-                    override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = sistema.checkClientTrusted(chain, authType)
-                    override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) {
-                        try { sistema.checkServerTrusted(chain, authType) } catch (e: Exception) { propria.checkServerTrusted(chain, authType) }
-                    }
-                    override fun getAcceptedIssuers() = sistema.acceptedIssuers + propria.acceptedIssuers
-                }
-                SSLContext.getInstance("TLS").apply { init(null, arrayOf(ambos), null) }.also { contexto = it }
-            } catch (e: Exception) {
-                semCa = true
-                null
-            }
         }
     }
 }

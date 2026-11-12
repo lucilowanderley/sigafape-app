@@ -7,7 +7,7 @@ import 'api/api.dart';
 import 'tema.dart';
 import 'util/nativo.dart';
 
-const versaoApp = '1.2.0';
+const versaoApp = '1.3.0';
 
 /// Endereço padrão do sistema; pode vir na compilação: --dart-define=SERVIDOR=https://...
 const servidorPadrao = String.fromEnvironment('SERVIDOR', defaultValue: bool.fromEnvironment('DEMO') ? 'https://demonstracao.sigafape' : '');
@@ -289,6 +289,7 @@ class Sessao extends ChangeNotifier {
 
   Future<void> _limpar() async {
     await Nativo.desligarAvisos();
+    await Nativo.desligarLocalizacao();
     await Nativo.gravar('vistos', null);
     api.token = null;
     usuario = null;
