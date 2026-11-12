@@ -46,6 +46,11 @@ class MainActivity : FlutterActivity() {
     private fun lerQr(result: MethodChannel.Result) {
         val opcoes = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
         try {
+            // ML Kit não inicia mais na abertura do app (1.4.1): inicia aqui, na primeira leitura
+            try {
+                Class.forName("com.google.mlkit.common.sdkinternal.MlKitContext").getMethod("initializeIfNeeded", Context::class.java).invoke(null, applicationContext)
+            } catch (e: Throwable) {
+            }
             GmsBarcodeScanning.getClient(this, opcoes).startScan()
                 .addOnSuccessListener { result.success(it.rawValue) }
                 .addOnCanceledListener { result.success(null) }
@@ -187,6 +192,7 @@ class MainActivity : FlutterActivity() {
                         LocalizacaoServico.desligar(this)
                         result.success(null)
                     }
+                    "ultimoErro" -> result.success(App.ultimoErro(this))
                     "abrirPedido" -> {
                         result.success(abrirPedido)
                         abrirPedido = null

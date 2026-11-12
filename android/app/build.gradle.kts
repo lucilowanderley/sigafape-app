@@ -49,6 +49,9 @@ android {
 
     buildTypes {
         release {
+            // 1.4.1: sem encolher o código (R8), para nenhuma biblioteca perder classes usadas por reflexão na abertura
+            isMinifyEnabled = false
+            isShrinkResources = false
             signingConfig = if (keyProps.isNotEmpty()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }

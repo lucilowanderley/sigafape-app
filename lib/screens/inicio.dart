@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../novidades.dart';
 import '../util/nativo.dart';
@@ -29,6 +30,7 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _ligarServicos();
+    _erroAnterior();
     _contar();
     _abrirPedido();
     // Com o app aberto confere a cada minuto; fechado, o Android confere a cada 15 minutos.
@@ -57,6 +59,30 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
       final c = await conferirNovidades(apiDe(context));
       if (mounted) setState(() => _contagem = c);
     } catch (_) {}
+  }
+
+  /// Se o app fechou sozinho da última vez, mostra o motivo para o usuário copiar e mandar ao suporte.
+  Future<void> _erroAnterior() async {
+    final erro = await Nativo.ultimoErro();
+    if (erro == null || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('O app fechou sozinho da última vez'),
+        content: SingleChildScrollView(child: SelectableText(erro, style: const TextStyle(fontSize: 11.5, fontFamily: 'monospace'))),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: erro));
+              Navigator.pop(ctx);
+              aviso(context, 'Texto copiado. Envie ao suporte do SIGAFAPE.');
+            },
+            child: const Text('COPIAR'),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+        ],
+      ),
+    );
   }
 
   /// Avisos do Android e, se o sistema usa, o envio da posição em segundo plano (um pedido de permissão por vez).

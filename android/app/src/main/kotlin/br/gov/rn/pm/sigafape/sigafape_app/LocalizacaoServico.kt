@@ -168,13 +168,22 @@ class LocalizacaoServico : Service() {
         private const val CANAL = "localizacao"
         private const val AVISO_ID = 4192
 
-        fun ligar(ctx: Context) {
+        /**
+         * Com o app aberto ([primeiroPlano]) usa startService e o serviço passa a primeiro plano sozinho: se o Android
+         * não deixar, o serviço só para (com startForegroundService o Android fecharia o app). Fora do app (celular
+         * religado) só no Android até 13, que permite localização iniciada pelo BOOT; no 14+ volta quando o app abrir.
+         */
+        fun ligar(ctx: Context, primeiroPlano: Boolean = true) {
             if (Cofre.lerSegredo(ctx, "token") == null) return
+            val permitido = ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!permitido) return
             val i = Intent(ctx, LocalizacaoServico::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
+                if (primeiroPlano || Build.VERSION.SDK_INT < 26) ctx.startService(i)
+                else if (Build.VERSION.SDK_INT < 34) ctx.startForegroundService(i)
             } catch (e: Exception) {
-                // Android não deixou iniciar agora (app em segundo plano): o app tenta de novo ao abrir.
+                // Android não deixou iniciar agora: o app tenta de novo ao abrir.
             }
         }
 
@@ -187,8 +196,8 @@ class LocalizacaoServico : Service() {
 /** Celular ligado de novo ou app atualizado: volta a enviar a posição (se o policial continua logado). */
 class ReiniciarLocalizacao : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            LocalizacaoServico.ligar(ctx)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            LocalizacaoServico.ligar(ctx, primeiroPlano = false)
         }
     }
 }

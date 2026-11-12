@@ -145,6 +145,16 @@ class Nativo {
     }
   }
 
+  /// Motivo da última vez que o app fechou por erro (guardado pelo Android; apaga depois de ler).
+  static Future<String?> ultimoErro() async {
+    if (semCanal) return null;
+    try {
+      return await _canal.invokeMethod<String>('ultimoErro');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Tela pedida ao tocar num aviso da barra (ex.: "alertas"), uma vez só.
   static Future<String?> abrirPedido() async {
     if (semCanal) return null;
