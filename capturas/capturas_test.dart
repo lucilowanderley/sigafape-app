@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sigafape_app/tema.dart';
+import 'package:sigafape_app/util/nativo.dart';
 
 import '../test/ajuda.dart';
 
@@ -137,5 +138,45 @@ void main() {
     await tester.tap(find.text('ASSINAR'));
     await esperar(tester);
     await foto(tester, 'v13-5-assinaturas');
+  });
+
+  testWidgets('qr e fotos 1.3.1', (tester) async {
+    celular(tester);
+    await abrirApp(tester);
+    await entrar(tester);
+    Nativo.qrDeTeste = 'https://sigafape.8bpm.internal/api/conferir/A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6';
+    await tester.tap(find.byTooltip('Conferir assinatura (ler QR)'));
+    await esperar(tester);
+    await foto(tester, 'v131-1-qr-resultado');
+    await tester.tap(find.byType(BackButton));
+    await esperar(tester);
+    await tester.tap(find.text('Abrir ocorrência'));
+    await esperar(tester);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Roubo'));
+    await tester.enterText(find.widgetWithText(TextField, 'Rua, número'), 'Rua Coronel Martiniano, 410');
+    await tester.enterText(find.widgetWithText(TextField, 'Bairro'), 'Centro');
+    await tester.enterText(find.widgetWithText(TextField, 'O que está acontecendo, quantas pessoas, veículos, rumo de fuga…'), 'Dois indivíduos numa moto vermelha, rumo ao bairro Alto.');
+    await tester.tap(find.text('Usar minha localização (GPS)'));
+    await esperar(tester);
+    Nativo.fotosDeTeste = [for (var k = 0; k < 4; k++) File('/tmp/claude-0/fotos/f$k.jpg').readAsBytesSync()];
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.dragUntilVisible(find.byKey(const Key('adicionar-foto')), find.byKey(const Key('form-ocorrencia')), const Offset(0, -250));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('adicionar-foto')));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v131-2-fotos-origem');
+    await tester.tap(find.byKey(const Key('foto-galeria')));
+    await esperar(tester);
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.runAsync(() async {
+      for (final e in find.byType(Image).evaluate()) {
+        await precacheImage((e.widget as Image).image, e);
+      }
+    });
+    await tester.dragUntilVisible(find.text('ENVIAR AO COPOM (4 FOTOS)'), find.byKey(const Key('form-ocorrencia')), const Offset(0, -250));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v131-3-fotos-grade');
+    Nativo.fotosDeTeste = [];
+    Nativo.qrDeTeste = null;
   });
 }

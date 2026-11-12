@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sigafape_app/api/api.dart';
@@ -239,6 +240,59 @@ void main() {
     expect(find.textContaining('Motivo: já atendida'), findsOneWidget);
   });
 
+  testWidgets('ocorrência com fotos: grade 3x2, galeria, câmera, remover e limite de 6', (tester) async {
+    tester.view.physicalSize = const Size(800, 2200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final png = base64Decode(fotoDemo);
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.tap(find.text('Abrir ocorrência'));
+    await esperar(tester);
+    expect(find.text('FOTOS (0 DE 6)'), findsOneWidget);
+    expect(find.text('Adicionar'), findsNWidgets(6));
+
+    // Galeria devolve 4
+    Nativo.fotosDeTeste = List.filled(4, png);
+    await tester.ensureVisible(find.byKey(const Key('adicionar-foto')));
+    await tester.tap(find.byKey(const Key('adicionar-foto')));
+    await esperar(tester);
+    await tester.tap(find.byKey(const Key('foto-galeria')));
+    await esperar(tester);
+    expect(find.text('FOTOS (4 DE 6)'), findsOneWidget);
+    expect(find.text('Adicionar'), findsNWidgets(2));
+
+    // Galeria devolve mais 3: só cabem 2
+    Nativo.fotosDeTeste = List.filled(3, png);
+    await tester.tap(find.byKey(const Key('adicionar-foto')));
+    await esperar(tester);
+    await tester.tap(find.byKey(const Key('foto-galeria')));
+    await esperar(tester);
+    expect(find.text('FOTOS (6 DE 6)'), findsOneWidget);
+    expect(find.text('Adicionar'), findsNothing);
+    expect(find.textContaining('Só cabem 6 fotos'), findsOneWidget);
+
+    // Remove uma e tira outra pela câmera
+    await tester.tap(find.byKey(const Key('remover-foto-0')));
+    await esperar(tester);
+    expect(find.text('FOTOS (5 DE 6)'), findsOneWidget);
+    Nativo.fotosDeTeste = [png];
+    await tester.tap(find.byKey(const Key('adicionar-foto')));
+    await esperar(tester);
+    await tester.tap(find.byKey(const Key('foto-camera')));
+    await esperar(tester);
+    expect(find.text('FOTOS (6 DE 6)'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Roubo'));
+    await tester.enterText(find.widgetWithText(TextField, 'Rua, número'), 'Rua Coronel Martiniano, 410');
+    await tester.ensureVisible(find.text('ENVIAR AO COPOM (6 FOTOS)'));
+    await tester.tap(find.text('ENVIAR AO COPOM (6 FOTOS)'));
+    await esperar(tester);
+    await esperar(tester);
+    expect(find.text('1 aguardando'), findsOneWidget);
+    Nativo.fotosDeTeste = [];
+  });
+
   testWidgets('sino do topo mostra o número e notificação nova vira aviso no celular', (tester) async {
     novidadesDeTeste.clear();
     Nativo.avisosDeTeste.clear();
@@ -291,5 +345,26 @@ void main() {
     expect(find.text('04/11/2035'), findsWidgets);
     expect(find.text('70%'), findsOneWidget);
     expect(find.textContaining('Tabela de Pedágio'), findsOneWidget);
+  });
+
+  testWidgets('conferir assinatura lendo o QR pelo ícone do topo', (tester) async {
+    Nativo.qrDeTeste = 'https://sigafape.ide-pirarucu.ts.net:8443/api/conferir/A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6';
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.tap(find.byTooltip('Conferir assinatura (ler QR)'));
+    await esperar(tester);
+    expect(find.text('Assinatura válida'), findsOneWidget);
+    expect(find.text('Oficio-211-2026.pdf'), findsOneWidget);
+
+    Nativo.qrDeTeste = 'https://exemplo.com/outra-coisa';
+    await tester.tap(find.text('LER OUTRO QR'));
+    await esperar(tester);
+    expect(find.text('Este QR não é de um documento assinado no SIGAFAPE.'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'ZZZZC3d4E5f6G7h8I9j0K1l2M3n4O5p6');
+    await tester.tap(find.text('CONFERIR'));
+    await esperar(tester);
+    expect(find.text('Assinatura não encontrada'), findsOneWidget);
+    Nativo.qrDeTeste = null;
   });
 }

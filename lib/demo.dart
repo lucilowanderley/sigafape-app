@@ -38,6 +38,7 @@ http.Client clienteDemo() {
     final p = {
       'id': pedidoId++, 'tipo': tipo, 'titulo': tipo == 'apoio' ? 'Apoio urgente' : c['natureza'], 'natureza': c['natureza'],
       'local': (c['endereco']?.toString().isNotEmpty ?? false) ? [c['endereco'], c['bairro']].where((e) => e != null && e.toString().isNotEmpty).join(' · ') : 'GPS ${c['latitude']}, ${c['longitude']}',
+      'fotos': (c['fotos'] as List?)?.length ?? 0,
       'situacao': 'pendente', 'situacao_texto': 'Aguardando o COPOM', 'resposta': null, 'respondida_por': null, 'ocorrencia': null, 'equipe': null, 'criada_em': iso(DateTime.now()),
     };
     pedidos.insert(0, p);
@@ -94,6 +95,17 @@ http.Client clienteDemo() {
   return MockClient((req) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (hostsForaDoAr.contains(req.url.host)) throw http.ClientException('Servidor não respondeu', req.url);
+    if (req.url.path.startsWith('/api/conferir/')) {
+      final cod = req.url.pathSegments.last;
+      if (cod != 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6') {
+        return json({'status': 'nao_encontrada', 'label': 'Assinatura não encontrada', 'detalhe': 'Este código não corresponde a nenhum documento assinado no SIGAFAPE.'}, 404);
+      }
+      return json({
+        'status': 'valida', 'label': 'Assinatura válida', 'detalhe': 'O documento guardado no sistema não foi alterado depois da assinatura.',
+        'assinante': {'nome': 'CB JOÃO BATISTA', 'matricula': '215.347-8'}, 'assinado_em': '2026-11-12 09:42:10', 'documento': 'Oficio-211-2026.pdf',
+        'tipo_via': 'carimbo no rodapé', 'protocolo': 'ALT-2026-0123', 'codigo_assinatura': '7F3A-21C0-9B44-C91E', 'cancelada': false,
+      });
+    }
     final caminho = req.url.path.split('/api/v1/').last;
     final corpo = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
     switch ((req.method, caminho)) {
@@ -214,6 +226,7 @@ http.Client clienteDemo() {
         final erros = <String, List<String>>{
           if ((corpo['natureza'] ?? '').toString().isEmpty) 'natureza': ['Escolha a natureza.'],
           if ((corpo['endereco'] ?? '').toString().isEmpty && corpo['latitude'] == null) 'endereco': ['Informe o endereço ou use a sua localização.'],
+          if (((corpo['fotos'] as List?)?.length ?? 0) > 6) 'fotos': ['Envie no máximo 6 fotos.'],
         };
         if (erros.isNotEmpty) return json({'message': erros.values.first.first, 'errors': erros}, 422);
         return json({'message': 'Ocorrência enviada ao COPOM. Você será avisado quando responderem.', 'data': pedido('ocorrencia', corpo)}, 201);
@@ -246,4 +259,6 @@ http.Client clienteDemo() {
   });
 }
 
+/// Imagem PNG pequena usada como foto de perfil e nas fotos de ocorrência dos testes.
+const fotoDemo = _fotoDemo;
 const _fotoDemo = 'iVBORw0KGgoAAAANSUhEUgAAAHgAAACWCAIAAACaSNt3AAACTElEQVR42u3dMW7cMBAF0HiQc6ZPk8OkSe9TuM8dcp6cIEawEme+yPdbA17y4XtMrVfy28fvP19kfQoBaNACGjRoAQ1aQIMGLaBBC2jQoAU0aAENGrSABi2gI/P1KQv9+ev9X1/68f1b/vrfkj+p9Anu49BDoV8gDueOg75IHMsdBH0jcSB37a289Ds/D3q1RYJ1ba8cYl0nKCdY1yHK49Z1jvLs69ZRux18dW8q7QudcNjqX4NGbwodcp3WvxKN3hE6p87969Fo0KAlGjptQDevSqONDtACGjRoBKBBSzJ05scP21al0UYHaEmHThvTnevR6E2hc0rdvBKN3hc6odT9a9DoraFnSz3y6nXUbgdft45q1uBP0vCM7tz57Lya/2XYs//xo07EqWO1QsKBMuV4t84i5FrUveCnQt/C7ekGy7k9r2MhuifQSN6pA7SABi2gQYMW0E/KA55N+p8X4uHXh4lXhre8gZfmngK99MbKBPR56LZ7V2e5x6AH71geER+ADrkpvJm7FTrwvvsN72E5/OkGHY3OJG6udlHuWWdR7lntqtHxLOKGMVKUe9ZflHt2UZR79lKUe3ZUlHv2VZR7dleUe/bob4ZNKXXu2WlR7tlvUe7ZtRmdPaPPrPOVvRflHgGjI3V0qPNrDhod2Wh1fllDo/Marc5XTDQ6+4JFVkGbGxdlNNroOBDa3Ljuo9FGx2nQ5sYt00OjjQ7QAho0aEeOnoOHRhsdoAU0aNAIQIMW0KBBC2jQcjf0I/4hREg+t9JoowO0gM7NX9Ji9B8rHMy+AAAAAElFTkSuQmCC';

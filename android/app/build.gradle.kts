@@ -69,4 +69,8 @@ dependencies {
     implementation("androidx.core:core:1.13.1")
     // Conferência de novas notificações em segundo plano (a cada 15 min, mesmo com o app fechado)
     implementation("androidx.work:work-runtime:2.9.1")
+    // Leitor de QR do Google Play Services (conferir assinatura): não pede permissão de câmera ao app
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    // Orientação das fotos da ocorrência (Android 6.0 não lê EXIF de stream sem isto)
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

@@ -85,8 +85,12 @@ class Api {
   Future<Map<String, dynamic>> get(String caminho, [Map<String, dynamic>? query]) =>
       _enviar(() => _cliente.get(_uri(caminho, query), headers: _cabecalhos));
 
-  Future<Map<String, dynamic>> post(String caminho, [Map<String, dynamic>? corpo]) =>
-      _enviar(() => _cliente.post(_uri(caminho), headers: _cabecalhos, body: jsonEncode(corpo ?? {})));
+  /// GET num endereço completo (ex.: conferência pública /api/conferir/{código}), com o token do aparelho.
+  Future<Map<String, dynamic>> getUrl(String url) => _enviar(() => _cliente.get(Uri.parse(url), headers: _cabecalhos));
+
+  /// [limite] maior para envios pesados (ex.: ocorrência com fotos no 4G).
+  Future<Map<String, dynamic>> post(String caminho, [Map<String, dynamic>? corpo, Duration limite = _limite]) =>
+      _enviar(() => _cliente.post(_uri(caminho), headers: _cabecalhos, body: jsonEncode(corpo ?? {})), limite: limite);
 
   Future<Map<String, dynamic>> delete(String caminho) =>
       _enviar(() => _cliente.delete(_uri(caminho), headers: _cabecalhos));
@@ -127,8 +131,8 @@ class Api {
     }
   }
 
-  Future<Map<String, dynamic>> _enviar(Future<http.Response> Function() fazer) async {
-    final r = await _rede(fazer);
+  Future<Map<String, dynamic>> _enviar(Future<http.Response> Function() fazer, {Duration limite = _limite}) async {
+    final r = await _rede(fazer, limite: limite);
     if (r.statusCode >= 200 && r.statusCode < 300) {
       if (r.body.isEmpty) return {};
       final dados = jsonDecode(utf8.decode(r.bodyBytes));

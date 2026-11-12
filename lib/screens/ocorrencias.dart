@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../api/api.dart';
@@ -117,6 +120,72 @@ class _TelaNovaOcorrenciaState extends State<TelaNovaOcorrencia> {
   bool _buscandoLocal = false, _enviando = false;
   String? _erroLocal;
   Map<String, List<String>> _erros = {};
+  final List<Uint8List> _fotos = [];
+  static const _maxFotos = 6;
+
+  Future<void> _adicionarFoto() async {
+    FocusScope.of(context).unfocus();
+    final origem = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(key: const Key('foto-camera'), leading: const Icon(Icons.photo_camera), title: const Text('Câmera'), subtitle: const Text('Tirar foto agora'), onTap: () => Navigator.pop(ctx, 'camera')),
+          ListTile(key: const Key('foto-galeria'), leading: const Icon(Icons.photo_library), title: const Text('Galeria'), subtitle: Text('Escolher até ${_maxFotos - _fotos.length}'), onTap: () => Navigator.pop(ctx, 'galeria')),
+        ]),
+      ),
+    );
+    if (origem == null) return;
+    try {
+      final novas = origem == 'camera' ? await Nativo.tirarFoto() : await Nativo.escolherFotos(_maxFotos - _fotos.length);
+      if (!mounted || novas.isEmpty) return;
+      final cabem = _maxFotos - _fotos.length;
+      setState(() => _fotos.addAll(novas.take(cabem)));
+      if (novas.length > cabem) aviso(context, 'Só cabem $_maxFotos fotos. As demais foram deixadas de fora.');
+    } on ErroLocal catch (e) {
+      if (mounted) aviso(context, e.mensagem, erro: true);
+    }
+  }
+
+  Widget _gradeFotos(Cores c) {
+    Widget casa(Widget filho) => ClipRRect(borderRadius: BorderRadius.circular(10), child: filho);
+    final casas = <Widget>[
+      for (var i = 0; i < _fotos.length; i++)
+        Stack(key: Key('foto-$i'), fit: StackFit.expand, children: [
+          casa(Image.memory(_fotos[i], fit: BoxFit.cover, gaplessPlayback: true, errorBuilder: (_, _, _) => Container(color: c.linha, child: Icon(Icons.broken_image, color: c.suave)))),
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Material(
+              color: Colors.black54,
+              shape: const CircleBorder(),
+              child: InkWell(
+                key: Key('remover-foto-$i'),
+                customBorder: const CircleBorder(),
+                onTap: _enviando ? null : () => setState(() => _fotos.removeAt(i)),
+                child: const Padding(padding: EdgeInsets.all(3), child: Icon(Icons.close, color: Colors.white, size: 18, semanticLabel: 'Remover foto')),
+              ),
+            ),
+          ),
+        ]),
+      for (var i = _fotos.length; i < _maxFotos; i++)
+        Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: c.linha, width: 2)),
+          child: InkWell(
+            key: i == _fotos.length ? const Key('adicionar-foto') : null,
+            borderRadius: BorderRadius.circular(10),
+            onTap: _enviando ? null : _adicionarFoto,
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.add_a_photo_outlined, color: c.suave),
+              const SizedBox(height: 2),
+              Text('Adicionar', style: TextStyle(color: c.suave, fontSize: 12)),
+            ]),
+          ),
+        ),
+    ];
+    return GridView.count(crossAxisCount: 3, shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), mainAxisSpacing: 8, crossAxisSpacing: 8, children: casas);
+  }
 
   @override
   void dispose() {
@@ -155,7 +224,8 @@ class _TelaNovaOcorrenciaState extends State<TelaNovaOcorrencia> {
         'referencia': _referencia.text.trim(),
         'relato': _relato.text.trim(),
         if (_local != null) ...{'latitude': _local!.latitude, 'longitude': _local!.longitude, 'precisao': _local!.precisao},
-      });
+        if (_fotos.isNotEmpty) 'fotos': [for (final f in _fotos) base64Encode(f)],
+      }, Duration(seconds: 25 + 20 * _fotos.length));
       if (!mounted) return;
       aviso(context, r['message']?.toString() ?? 'Ocorrência enviada ao COPOM.');
       Navigator.pop(context, true);
@@ -242,11 +312,22 @@ class _TelaNovaOcorrenciaState extends State<TelaNovaOcorrencia> {
           maxLength: 3000,
           decoration: const InputDecoration(hintText: 'O que está acontecendo, quantas pessoas, veículos, rumo de fuga…'),
         ),
-        const SizedBox(height: 10),
+        rotulo('FOTOS (${_fotos.length} DE $_maxFotos)'),
+        _gradeFotos(c),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(
+            _erro('fotos') ?? _erros.entries.where((e) => e.key.startsWith('fotos.')).map((e) => e.value.first).firstOrNull ?? 'Toque em Adicionar para usar a câmera ou a galeria (pode escolher várias).',
+            style: TextStyle(color: _erros.keys.any((k) => k.startsWith('fotos')) ? const Color(0xFFB3261E) : c.suave, fontSize: 12.5),
+          ),
+        ),
+        const SizedBox(height: 14),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: const Color(0xFFC0392B), foregroundColor: Colors.white, minimumSize: const Size.fromHeight(50)),
           onPressed: _enviando ? null : _enviar,
-          child: _enviando ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white)) : const Text('ENVIAR AO COPOM'),
+          child: _enviando
+              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+              : Text(_fotos.isEmpty ? 'ENVIAR AO COPOM' : 'ENVIAR AO COPOM (${_fotos.length} FOTO${_fotos.length > 1 ? 'S' : ''})'),
         ),
         const SizedBox(height: 8),
         Text('A ocorrência chega no Painel 190. Quando o COPOM aceitar ou recusar, você recebe um aviso no sino.', style: TextStyle(color: c.suave, fontSize: 12.5)),

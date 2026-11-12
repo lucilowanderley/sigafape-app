@@ -11,6 +11,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
+import android.provider.MediaStore
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -35,6 +40,79 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.getStringExtra(Avisos.EXTRA_ABRIR)?.let { abrirPedido = it }
+    }
+
+    /** Leitor de QR do Google Play Services (a tela da câmera é do Google; o app não pede permissão de câmera). */
+    private fun lerQr(result: MethodChannel.Result) {
+        val opcoes = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
+        try {
+            GmsBarcodeScanning.getClient(this, opcoes).startScan()
+                .addOnSuccessListener { result.success(it.rawValue) }
+                .addOnCanceledListener { result.success(null) }
+                .addOnFailureListener { result.error("sem_leitor", it.message, null) }
+        } catch (e: Exception) {
+            result.error("sem_leitor", e.message, null)
+        }
+    }
+
+    // ---------- Fotos da ocorrência (câmera ou galeria, sem plugins) ----------
+
+    private var pedidoFoto: MethodChannel.Result? = null
+    private var arquivoFoto: File? = null
+    private var maximoFotos = 6
+
+    private fun tirarFoto(result: MethodChannel.Result) {
+        pedidoFoto?.success(null)
+        val pasta = File(cacheDir, "fotos").apply { mkdirs() }
+        val arquivo = File(pasta, "foto-${System.currentTimeMillis()}.jpg")
+        val uri = FileProvider.getUriForFile(this, "$packageName.arquivos", arquivo)
+        val i = Intent(MediaStore.ACTION_IMAGE_CAPTURE).putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        try {
+            pedidoFoto = result
+            arquivoFoto = arquivo
+            @Suppress("DEPRECATION")
+            startActivityForResult(i, PEDIDO_CAMERA)
+        } catch (e: Exception) {
+            pedidoFoto = null
+            result.error("sem_camera", e.message, null)
+        }
+    }
+
+    private fun escolherFotos(result: MethodChannel.Result, maximo: Int) {
+        pedidoFoto?.success(null)
+        maximoFotos = maximo.coerceIn(1, 6)
+        val i = Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE)
+            .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, maximo > 1)
+        try {
+            pedidoFoto = result
+            @Suppress("DEPRECATION")
+            startActivityForResult(Intent.createChooser(i, "Escolher fotos"), PEDIDO_GALERIA)
+        } catch (e: Exception) {
+            pedidoFoto = null
+            result.error("sem_galeria", e.message, null)
+        }
+    }
+
+    @Deprecated("Usado sem AndroidX Activity Result para manter o app sem dependências extras")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PEDIDO_CAMERA && requestCode != PEDIDO_GALERIA) return
+        val r = pedidoFoto ?: return
+        pedidoFoto = null
+        if (resultCode != RESULT_OK) return r.success(null)
+        Thread {
+            val fotos = mutableListOf<ByteArray>()
+            if (requestCode == PEDIDO_CAMERA) {
+                arquivoFoto?.let { a -> Fotos.reduzir(this, Uri.fromFile(a))?.let { fotos.add(it) }; a.delete() }
+            } else {
+                val uris = mutableListOf<Uri>()
+                data?.clipData?.let { cd -> for (k in 0 until cd.itemCount) uris.add(cd.getItemAt(k).uri) }
+                if (uris.isEmpty()) data?.data?.let { uris.add(it) }
+                for (u in uris.take(maximoFotos)) Fotos.reduzir(this, u)?.let { fotos.add(it) }
+            }
+            runOnUiThread { r.success(fotos) }
+        }.start()
     }
 
     private var pedidoServico: MethodChannel.Result? = null
@@ -101,6 +179,9 @@ class MainActivity : FlutterActivity() {
                         ConferirNovidades.cancelar(this)
                         result.success(null)
                     }
+                    "lerQr" -> lerQr(result)
+                    "tirarFoto" -> tirarFoto(result)
+                    "escolherFotos" -> escolherFotos(result, call.argument<Int>("maximo") ?: 6)
                     "ligarLocalizacao" -> ligarLocalizacao(result)
                     "desligarLocalizacao" -> {
                         LocalizacaoServico.desligar(this)
@@ -221,5 +302,7 @@ class MainActivity : FlutterActivity() {
         private const val PEDIDO_AVISOS = 4191
         private const val PEDIDO_SERVICO = 4193
         private const val PEDIDO_TEMPO_TODO = 4194
+        private const val PEDIDO_CAMERA = 4195
+        private const val PEDIDO_GALERIA = 4196
     }
 }

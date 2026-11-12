@@ -7,6 +7,7 @@ import '../widgets/comum.dart';
 import 'alertas.dart';
 import 'caderno.dart';
 import 'cautela.dart';
+import 'conferir.dart';
 import 'inspecoes.dart';
 import 'ocorrencias.dart';
 import 'reserva.dart';
@@ -57,6 +58,11 @@ class _TelaPainelState extends State<TelaPainel> {
         titulo: Marca(unidade: pol?['unidade']?.toString() ?? sessao.usuario?['unidade']?.toString()),
         mostrarVoltar: false,
         acoes: [
+          IconButton(
+            tooltip: 'Conferir assinatura (ler QR)',
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TelaConferir())),
+          ),
           IconButton(
             tooltip: 'Caderno',
             icon: const Icon(Icons.edit_note),

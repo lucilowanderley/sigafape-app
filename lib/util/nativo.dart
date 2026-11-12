@@ -106,6 +106,45 @@ class Nativo {
     } catch (_) {}
   }
 
+  /// QR lido nos testes.
+  static String? qrDeTeste;
+
+  /// Abre a câmera (leitor de QR do Google Play Services) e devolve o texto do QR; null se cancelar.
+  /// Lança [ErroLocal] com a mensagem quando o leitor não existe no aparelho.
+  static Future<String?> lerQr() async {
+    if (semCanal) return qrDeTeste;
+    try {
+      return await _canal.invokeMethod<String>('lerQr');
+    } on PlatformException catch (e) {
+      throw ErroLocal(e.code == 'sem_leitor'
+          ? 'Este celular não tem o leitor de QR do Google. Digite o código que aparece embaixo do QR.'
+          : 'Não foi possível abrir a câmera. Tente de novo.');
+    } on MissingPluginException {
+      throw const ErroLocal('Leitor de QR ainda não disponível neste aparelho. Digite o código.');
+    }
+  }
+
+  /// Fotos devolvidas nos testes (sem o canal nativo).
+  static List<Uint8List> fotosDeTeste = [];
+
+  /// Abre a câmera e devolve a foto já reduzida (JPEG até 1600 px); lista vazia se cancelar.
+  static Future<List<Uint8List>> tirarFoto() => _fotos('tirarFoto', const {}, 'Não foi possível abrir a câmera.');
+
+  /// Abre a galeria (pode escolher várias, até [maximo]); devolve as fotos já reduzidas.
+  static Future<List<Uint8List>> escolherFotos(int maximo) => _fotos('escolherFotos', {'maximo': maximo}, 'Não foi possível abrir a galeria.');
+
+  static Future<List<Uint8List>> _fotos(String metodo, Map<String, Object> args, String falha) async {
+    if (semCanal) return List.of(fotosDeTeste);
+    try {
+      final r = await _canal.invokeMethod<List<Object?>>(metodo, args);
+      return [for (final f in r ?? const []) if (f is Uint8List) f];
+    } on PlatformException {
+      throw ErroLocal('$falha Tente de novo.');
+    } on MissingPluginException {
+      throw const ErroLocal('Fotos ainda não disponíveis nesta versão do app.');
+    }
+  }
+
   /// Tela pedida ao tocar num aviso da barra (ex.: "alertas"), uma vez só.
   static Future<String?> abrirPedido() async {
     if (semCanal) return null;
