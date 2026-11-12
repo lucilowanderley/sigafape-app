@@ -116,4 +116,26 @@ void main() {
     await esperar(tester);
     await foto(tester, 'campo-6-minhas-ocorrencias');
   });
+
+  testWidgets('calculadora e inicio 1.3.0', (tester) async {
+    celular(tester);
+    await abrirApp(tester);
+    await entrar(tester);
+    await foto(tester, 'v13-1-inicio');
+    await tester.ensureVisible(find.text('FERRAMENTAS'));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v13-2-inicio-ferramentas');
+    await tester.tap(find.text('FERRAMENTAS'));
+    await esperar(tester);
+    await foto(tester, 'v13-3-reserva');
+    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v13-4-reserva-linha');
+    await tester.tap(find.byType(BackButton));
+    await esperar(tester);
+    await tester.ensureVisible(find.text('ASSINAR'));
+    await tester.tap(find.text('ASSINAR'));
+    await esperar(tester);
+    await foto(tester, 'v13-5-assinaturas');
+  });
 }

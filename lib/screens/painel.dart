@@ -9,6 +9,7 @@ import 'caderno.dart';
 import 'cautela.dart';
 import 'inspecoes.dart';
 import 'ocorrencias.dart';
+import 'reserva.dart';
 
 /// Tela inicial (opção A): cartão do policial e atalhos em grade, como o "Meu painel" da web.
 class TelaPainel extends StatefulWidget {
@@ -107,7 +108,7 @@ class _TelaPainelState extends State<TelaPainel> {
     String funcao(Map<String, dynamic> s) => [s['funcao'], s['titulo'] ?? s['tipo']].firstWhere((e) => e != null && e.toString().isNotEmpty, orElse: () => '').toString();
     String periodo(Map<String, dynamic> s) => '${quandoCurto(s['inicio'])}–${hora(s['fim'])}';
     String servicoDetalhe(Map<String, dynamic> s) =>
-        [agora != null ? 'até ${hora(s['fim'])}' : periodo(s), funcao(s)].where((e) => e.isNotEmpty).join(' · ');
+        [agora != null ? 'até ${hora(s['fim'])}' : periodo(s), funcao(s)].where((e) => e.isNotEmpty).join('\n');
 
     // Assinar: tudo que espera a minha assinatura (recebimento de cautela + ciência de notificação).
     final assinaturas = d['assinaturas'] as Map<String, dynamic>?;
@@ -192,6 +193,7 @@ class _TelaPainelState extends State<TelaPainel> {
           '${(diarias['lista'] as List?)?.length ?? 0} lançamento(s)',
           () => _abrir(_TelaDiarias(diarias: diarias)),
         ),
+      _Atalho(const Color(0xFFB8860B), Icons.calculate_outlined, 'FERRAMENTAS', 'Reserva', 'calcular minha data', () => _abrir(const TelaReserva())),
       _Atalho(const Color(0xFF16335F), Icons.badge_outlined, 'MEUS DADOS', 'Ficha', 'consultar', () => widget.irPara(4)),
     ];
 
@@ -393,7 +395,7 @@ class _CartaoAtalho extends StatelessWidget {
               ),
               Text(
                 a.detalhe,
-                maxLines: 1,
+                maxLines: a.detalhe.contains('\n') ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 12, color: c.suave),
               ),

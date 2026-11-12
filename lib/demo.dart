@@ -147,6 +147,24 @@ http.Client clienteDemo() {
         if (erro != null) return erro;
         alertaPendente = false;
         return json({'message': 'Ciência assinada.', 'codigo': 'F00D-CAFE-1234-5678', 'data': alerta()});
+      case ('GET', 'calculadora-reserva'):
+        final ingresso = req.url.queryParameters['ingresso'] ?? '2005-03-01';
+        return json({
+          'campos': {'ingresso': ingresso, 'anos': 0, 'meses': 0, 'dias': 0, 'origem': 'fa', 'licencas': 0},
+          'resultado': {
+            'data': '2035-11-04', 'data_tabela': '2035-10-30', 'ja_pode': false, 'faltam': '8 anos, 11 meses e 27 dias', 'dias_faltam': 3277, 'progresso': 70,
+            'regra': 'Regra de transição (LC 692/2021, art. 24)', 'servico_hoje': '21 anos, 8 meses e 15 dias', 'militar_hoje': '21 anos, 8 meses e 15 dias',
+            'exigido_servico': '30 anos, 7 meses e 6 dias', 'exigido_militar': '28 anos, 2 meses', 'pedagio': '7 meses e 6 dias', 'anterior_glosado': null, 'idade_na_data': 54,
+            'linha_do_tempo': [
+              {'data': ingresso, 'titulo': 'Ingresso na PM', 'detalhe': 'sem tempo anterior averbado', 'estado': 'feito', 'reserva': false},
+              {'data': '2021-12-31', 'titulo': 'Corte da LC 692/2021', 'detalhe': 'faltavam 13 anos, 2 meses; pedágio de 7 meses e 6 dias', 'estado': 'feito', 'reserva': false},
+              {'data': dia(hoje), 'titulo': 'Hoje', 'detalhe': '21 anos, 8 meses e 15 dias de serviço', 'estado': 'hoje', 'reserva': false},
+              {'data': '2033-05-01', 'titulo': 'Atividade militar cumprida', 'detalhe': '28 anos, 2 meses exigidos', 'estado': 'falta', 'reserva': false},
+              {'data': '2035-11-04', 'titulo': 'Tempo de serviço cumprido', 'detalhe': '30 anos, 7 meses e 6 dias exigidos', 'estado': 'falta', 'reserva': true},
+            ],
+          },
+          'aviso': 'Simulação pela LC Estadual nº 692/2021. A data oficial é a que o setor de pessoal confirmar.',
+        });
       case ('GET', 'posicao'):
         return json({'ativo': true, 'intervalo_minutos': 5, 'pedido': false});
       case ('POST', 'posicao'):

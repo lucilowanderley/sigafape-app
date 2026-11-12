@@ -264,7 +264,7 @@ void main() {
     await abrirApp(tester);
     await entrar(tester);
     expect(find.text('Escalado'), findsOneWidget);
-    expect(find.textContaining('· Motorista'), findsOneWidget);
+    expect(find.textContaining('\nMotorista'), findsOneWidget);
     expect(find.text('1 cautela · 1 notificação'), findsOneWidget);
     await tester.tap(find.text('ASSINAR'));
     await esperar(tester);
@@ -278,5 +278,18 @@ void main() {
     expect(sessao.servidores.map((s) => s.endereco), ['https://sigafape.8bpm.internal', 'https://sigafape.ide-pirarucu.ts.net:8443']);
     expect(sessao.semConexao, isFalse);
     expect(find.widgetWithText(TextField, 'Usuário ou matrícula'), findsOneWidget);
+  });
+
+  testWidgets('calculadora de reserva abre pelo cartão Ferramentas', (tester) async {
+    await abrirApp(tester);
+    await entrar(tester);
+    await tester.ensureVisible(find.text('FERRAMENTAS'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('FERRAMENTAS'));
+    await esperar(tester);
+    expect(find.text('Calculadora de reserva'), findsOneWidget);
+    expect(find.text('04/11/2035'), findsWidgets);
+    expect(find.text('70%'), findsOneWidget);
+    expect(find.textContaining('Tabela de Pedágio'), findsOneWidget);
   });
 }
