@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Localização em segundo plano (decisão de 2026-11-12: sempre que o policial estiver logado no app).
- * Serviço em primeiro plano com aviso fixo na barra do Android. A cada minuto pergunta ao servidor
+ * Serviço em primeiro plano com aviso discreto (linha silenciosa) do Android. A cada minuto pergunta ao servidor
  * (GET /api/v1/posicao) se deve enviar: envia no intervalo de Configurações ou na hora, quando o Painel 190 pede.
  * Se o sistema desligar a localização (intervalo 0) ou a sessão expirar, o serviço para.
  */
@@ -140,11 +140,23 @@ class LocalizacaoServico : Service() {
         return melhor
     }
 
+    /**
+     * Aviso discreto (opção C, 2026-11-13): canal de importância mínima, sem som, sem ícone na barra
+     * de cima e escondido na tela de bloqueio. O Android exige um aviso para o serviço continuar,
+     * então ele fica só como uma linha pequena no fim da lista ("Silenciosas").
+     */
     private fun aviso(): Notification {
         if (Build.VERSION.SDK_INT >= 26) {
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(
-                NotificationChannel(CANAL, "Localização em serviço", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Aviso fixo enquanto o app envia a sua posição ao SIGAFAPE"
+            val nm = getSystemService(NotificationManager::class.java)
+            // O canal antigo era de importância baixa; o Android não deixa baixar a de um canal existente.
+            try { nm?.deleteNotificationChannel(CANAL_ANTIGO) } catch (e: Exception) {}
+            nm?.createNotificationChannel(
+                NotificationChannel(CANAL, "Localização (discreto)", NotificationManager.IMPORTANCE_MIN).apply {
+                    description = "Linha discreta enquanto o app envia a sua posição ao SIGAFAPE"
+                    setShowBadge(false)
+                    setSound(null, null)
+                    enableVibration(false)
+                    lockscreenVisibility = Notification.VISIBILITY_SECRET
                 }
             )
         }
@@ -152,20 +164,26 @@ class LocalizacaoServico : Service() {
             this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val texto = "Enviando sua posição ao SIGAFAPE a cada $intervaloMin min" + (ultimaHora?.let { " · última às $it" } ?: "")
+        val texto = ultimaHora?.let { "Última posição enviada às $it" } ?: "Enviando a cada $intervaloMin min"
         return NotificationCompat.Builder(this, CANAL)
             .setSmallIcon(R.drawable.ic_local)
-            .setContentTitle("Localização ligada")
+            .setContentTitle("Localização ativa")
             .setContentText(texto)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
             .setContentIntent(abrir)
             .build()
     }
 
     companion object {
-        private const val CANAL = "localizacao"
+        private const val CANAL = "localizacao_discreta"
+        private const val CANAL_ANTIGO = "localizacao"
         private const val AVISO_ID = 4192
 
         /**
