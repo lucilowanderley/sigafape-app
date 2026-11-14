@@ -193,6 +193,17 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "ultimoErro" -> result.success(App.ultimoErro(this))
+                    // Digital/rosto (2026-11-14)
+                    "biometriaSituacao" -> result.success(Biometria.situacao(this))
+                    "biometriaCriar" -> result.success(Biometria.criarChave())
+                    "biometriaApagar" -> {
+                        Biometria.apagar()
+                        result.success(null)
+                    }
+                    "biometriaAssinar" -> Biometria.assinar(this, call.argument<String>("texto")!!, call.argument<String>("titulo") ?: "SIGAFAPE",
+                        call.argument<String>("subtitulo") ?: "") { assinatura, erro ->
+                        if (assinatura != null) result.success(assinatura) else result.error(erro ?: "erro", erro, null)
+                    }
                     // Aviso de versão nova do app: abre o link do APK no navegador
                     "abrirLink" -> {
                         startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(call.argument<String>("url")!!)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

@@ -136,7 +136,7 @@ class _TelaAlertaState extends State<TelaAlerta> {
       titulo: 'Dar ciência assinada',
       descricao: '"${a['assunto']}" · ${a['prioridade_texto']}. Digite sua matrícula e senha para assinar.',
       botao: 'Assinar ciência',
-      assinar: (m, s) => api.post('alertas/${widget.id}/ciencia', {'matricula': m, 'senha': s}),
+      assinar: (cred) => api.post('alertas/${widget.id}/ciencia', cred),
     );
     if (r == null || !mounted) return;
     aviso(context, 'Ciência assinada. Código ${r['codigo'] ?? ''}');

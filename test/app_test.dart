@@ -442,5 +442,67 @@ void main() {
     expect(find.text('3º SGT LUCILO WANDERLEY SILVA COSTA'), findsOneWidget);
     nomeDemo = 'CB JOÃO BATISTA';
   });
-}
 
+  testWidgets('digital/rosto: ligar em Eu, assinar a ciência e entrar com a digital', (tester) async {
+    Nativo.biometriaDeTeste = 'ok';
+    addTearDown(() => Nativo.biometriaDeTeste = 'antigo');
+    final sessao = await abrirApp(tester);
+    expect(find.byKey(const Key('entrar-digital')), findsNothing);
+    await entrar(tester);
+    await aba(tester, 'Eu');
+    await tester.scrollUntilVisible(find.byKey(const Key('chave-digital')), 200, scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.byKey(const Key('chave-digital')));
+    await tester.pumpAndSettle();
+    // senha errada não liga
+    await tester.enterText(find.byKey(const Key('senha-digital')), 'errada');
+    await tester.tap(find.byKey(const Key('ligar-digital')));
+    await esperar(tester);
+    expect(find.text('Senha incorreta.'), findsOneWidget);
+    expect(sessao.biometriaLigada, isFalse);
+    await tester.enterText(find.byKey(const Key('senha-digital')), 'demo');
+    await tester.tap(find.byKey(const Key('ligar-digital')));
+    await esperar(tester);
+    await esperar(tester);
+    expect(sessao.biometriaLigada, isTrue);
+    expect(await Nativo.ler('bio_chave'), '77');
+    expect(find.textContaining('Ligado neste aparelho'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6)); // aviso "Pronto" some
+    await tester.pumpAndSettle();
+
+    // assinar a ciência com matrícula + digital (sem digitar senha)
+    await aba(tester, 'Alertas');
+    await tester.tap(find.text('Escala extra do feriado'));
+    await esperar(tester);
+    await tester.tap(find.text('DAR CIÊNCIA ASSINADA'));
+    await tester.pumpAndSettle();
+    expect(find.text('ou com a senha'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('assinar-digital')));
+    await esperar(tester);
+    await esperar(tester);
+    expect(find.textContaining('Código F00D-CAFE-1234-5678'), findsWidgets);
+
+    // sair mantém a digital; entrar com ela
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.runAsync(sessao.sair);
+    await esperar(tester);
+    expect(sessao.logado, isFalse);
+    expect(find.text('ENTRAR COM DIGITAL OU ROSTO'), findsOneWidget);
+    expect(find.textContaining('mat. 215.347-8'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('entrar-digital')));
+    await esperar(tester);
+    await esperar(tester);
+    expect(sessao.logado, isTrue);
+  });
+
+  testWidgets('digital: celular sem digital cadastrada explica e não deixa ligar', (tester) async {
+    Nativo.biometriaDeTeste = 'sem_cadastro';
+    addTearDown(() => Nativo.biometriaDeTeste = 'antigo');
+    await abrirApp(tester);
+    await entrar(tester);
+    await aba(tester, 'Eu');
+    await tester.scrollUntilVisible(find.byKey(const Key('chave-digital')), 200, scrollable: find.byType(Scrollable).last);
+    expect(find.textContaining('Cadastre uma digital'), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('chave-digital'))).onChanged, isNull);
+  });
+}

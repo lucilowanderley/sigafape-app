@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../api/api.dart';
 import '../tema.dart';
+import '../util/nativo.dart';
 import 'comum.dart';
 
-/// Janela de assinatura eletrônica: matrícula + senha (a senha nunca é guardada no aparelho).
-/// [assinar] recebe matrícula e senha e chama a API; erros 422 da assinatura aparecem no campo senha.
+/// Janela de assinatura eletrônica: matrícula + senha, ou matrícula + digital/rosto quando ligados
+/// neste aparelho (opção A, 2026-11-14). A senha nunca é guardada no aparelho.
+/// [assinar] recebe as credenciais prontas para juntar ao corpo do pedido: {'matricula', 'senha'} ou
+/// {'matricula', 'biometria': {chave, desafio, assinatura}}; erros 422 da assinatura aparecem no campo senha.
 /// Devolve o resultado de [assinar], ou null se o policial cancelar.
 Future<T?> pedirAssinatura<T>(
   BuildContext context, {
   required String titulo,
   required String descricao,
   required String botao,
-  required Future<T> Function(String matricula, String senha) assinar,
+  required Future<T> Function(Map<String, dynamic> credenciais) assinar,
 }) {
   final matriculaPadrao = Escopo.ler(context).policial?['matricula']?.toString() ?? '';
   return showModalBottomSheet<T>(
@@ -29,7 +32,7 @@ Future<T?> pedirAssinatura<T>(
 class _JanelaAssinatura<T> extends StatefulWidget {
   const _JanelaAssinatura({required this.titulo, required this.descricao, required this.botao, required this.assinar, required this.matricula});
   final String titulo, descricao, botao, matricula;
-  final Future<T> Function(String matricula, String senha) assinar;
+  final Future<T> Function(Map<String, dynamic> credenciais) assinar;
 
   @override
   State<_JanelaAssinatura<T>> createState() => _JanelaAssinaturaState<T>();
@@ -57,8 +60,38 @@ class _JanelaAssinaturaState<T> extends State<_JanelaAssinatura<T>> {
     });
     if (_erroMatricula != null || _erroSenha != null) return;
     setState(() => _enviando = true);
+    await _assinar({'matricula': _matricula.text.trim(), 'senha': _senha.text});
+  }
+
+  Future<void> _enviarDigital() async {
+    setState(() {
+      _erroMatricula = _matricula.text.trim().isEmpty ? 'Informe sua matrícula.' : null;
+      _erroSenha = _erroGeral = null;
+    });
+    if (_erroMatricula != null) return;
+    setState(() => _enviando = true);
+    final sessao = Escopo.ler(context);
+    Map<String, dynamic>? prova;
     try {
-      final r = await widget.assinar(_matricula.text.trim(), _senha.text);
+      prova = await sessao.provaBiometrica(widget.titulo, subtitulo: 'Matrícula ${_matricula.text.trim()}');
+    } on ApiErro catch (e) {
+      setState(() { _enviando = false; _erroGeral = e.detalhe; });
+      return;
+    } on ErroLocal catch (e) {
+      setState(() { _enviando = false; _erroGeral = e.mensagem; });
+      return;
+    }
+    if (prova == null) {
+      // "Usar senha": fica na janela, com o campo de senha
+      setState(() => _enviando = false);
+      return;
+    }
+    await _assinar({'matricula': _matricula.text.trim(), 'biometria': prova});
+  }
+
+  Future<void> _assinar(Map<String, dynamic> credenciais) async {
+    try {
+      final r = await widget.assinar(credenciais);
       if (mounted) Navigator.pop(context, r);
     } on ApiErro catch (e) {
       setState(() {
@@ -87,12 +120,27 @@ class _JanelaAssinaturaState<T> extends State<_JanelaAssinatura<T>> {
           decoration: InputDecoration(labelText: 'Matrícula', errorText: _erroMatricula),
           textInputAction: TextInputAction.next,
         ),
+        if (Escopo.de(context).biometriaLigada) ...[
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            key: const Key('assinar-digital'),
+            onPressed: _enviando ? null : _enviarDigital,
+            icon: const Icon(Icons.fingerprint, size: 22),
+            label: Text('${widget.botao.toUpperCase()} COM DIGITAL'),
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            const Expanded(child: Divider()),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('ou com a senha', style: TextStyle(color: c.suave, fontSize: 13))),
+            const Expanded(child: Divider()),
+          ]),
+        ],
         const SizedBox(height: 12),
         TextField(
           controller: _senha,
           enabled: !_enviando,
           obscureText: !_ver,
-          autofocus: true,
+          autofocus: !Escopo.de(context).biometriaLigada,
           decoration: InputDecoration(
             labelText: 'Senha',
             errorText: _erroSenha,

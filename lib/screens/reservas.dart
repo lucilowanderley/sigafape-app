@@ -174,14 +174,13 @@ class _TelaNovaReservaState extends State<TelaNovaReserva> {
       descricao: '${m['nome']}${m['numero_serie'] != null ? ' · ${m['numero_serie']}' : ''} · retirada ${DateFormat('dd/MM HH:mm').format(_retirada)}. '
           'Se a armaria não confirmar em $_tolerancia min, a reserva cai.',
       botao: 'Assinar e reservar',
-      assinar: (mat, senha) => api.post('reservas', {
+      assinar: (cred) => api.post('reservas', {
         'tipo': m['tipo'],
         'material_id': m['id'],
         'retirada_prevista': f.format(_retirada),
         'devolucao_prevista': _devolucao == null ? null : DateFormat('yyyy-MM-dd').format(_devolucao!),
         'observacoes': _obs.text.trim().isEmpty ? null : _obs.text.trim(),
-        'matricula': mat,
-        'senha': senha,
+        ...cred,
       }),
     );
     if (r == null || !mounted) return;

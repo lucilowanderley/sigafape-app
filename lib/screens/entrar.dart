@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api/api.dart';
 import '../sessao.dart';
 import '../tema.dart';
+import '../util/nativo.dart';
 import '../widgets/comum.dart';
 import 'servidores.dart';
 
@@ -56,10 +57,27 @@ class _TelaEntrarState extends State<TelaEntrar> {
     }
   }
 
+  Future<void> _entrarDigital() async {
+    setState(() {
+      _enviando = true;
+      _erro = null;
+    });
+    final sessao = Escopo.ler(context);
+    try {
+      await sessao.entrarComDigital();
+    } on ApiErro catch (e) {
+      if (mounted) setState(() => _erro = e.detalhe);
+    } on ErroLocal catch (e) {
+      if (mounted) setState(() => _erro = e.mensagem);
+    }
+    if (mounted && sessao.api.token == null) setState(() => _enviando = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = Cores.de(context);
-    final servidor = Escopo.de(context).servidor;
+    final sessao = Escopo.de(context);
+    final servidor = sessao.servidor;
     final semHttps = servidor.startsWith('http://');
     return Scaffold(
       body: Stack(children: [
@@ -89,6 +107,27 @@ class _TelaEntrarState extends State<TelaEntrar> {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                           const Text('Entrar', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                           const SizedBox(height: 14),
+                          if (sessao.biometriaLigada) ...[
+                            // Digital/rosto ligados neste aparelho (opção A, 2026-11-14)
+                            FilledButton.icon(
+                              key: const Key('entrar-digital'),
+                              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(64)),
+                              onPressed: _enviando ? null : _entrarDigital,
+                              icon: const Icon(Icons.fingerprint, size: 30),
+                              label: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                const Text('ENTRAR COM DIGITAL OU ROSTO'),
+                                Text([sessao.bioNome, if ((sessao.bioMatricula ?? '').isNotEmpty) 'mat. ${sessao.bioMatricula}'].whereType<String>().join(' · '),
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                              ]),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(children: [
+                              const Expanded(child: Divider()),
+                              Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('ou com usuário e senha', style: TextStyle(color: c.suave, fontSize: 13))),
+                              const Expanded(child: Divider()),
+                            ]),
+                            const SizedBox(height: 8),
+                          ],
                           TextField(
                             controller: _usuario,
                             enabled: !_enviando,
@@ -118,7 +157,7 @@ class _TelaEntrarState extends State<TelaEntrar> {
                             Text(_erro!, style: const TextStyle(color: Color(0xFFB3261E), fontWeight: FontWeight.w600)),
                           ],
                           const SizedBox(height: 16),
-                          FilledButton(
+                          (sessao.biometriaLigada ? OutlinedButton.new : FilledButton.new)(
                             onPressed: _enviando ? null : _entrar,
                             child: _enviando ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)) : const Text('ENTRAR'),
                           ),

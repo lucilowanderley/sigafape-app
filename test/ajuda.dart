@@ -24,6 +24,9 @@ Future<Sessao> abrirApp(WidgetTester tester,
   await Nativo.gravar('servidores', jsonEncode([for (final s in servidores) {'nome': nomeSugerido(s), 'endereco': s}]));
   await Nativo.gravar('servidor', servidores.isEmpty ? null : servidores.first);
   await Nativo.gravarSegredo('token', null);
+  for (final k in ['bio_chave', 'bio_nome', 'bio_matricula']) {
+    await Nativo.gravar(k, null);
+  }
   final sessao = Sessao(cliente: clienteDemo());
   await tester.pumpWidget(AppSigafape(sessao: sessao));
   await tester.runAsync(sessao.iniciar);

@@ -63,7 +63,7 @@ class _TelaCautelaState extends State<TelaCautela> {
       descricao: '${c['material']}${c['numero_serie'] != null ? ' · série ${c['numero_serie']}' : ''} · cautela de urgência nº ${c['id']}'
           '${c['lote'] != null ? '. Assina todos os materiais pendentes do lote.' : ''}',
       botao: 'Assinar',
-      assinar: (m, s) => api.post('cautelas/${c['id']}/assinar-recebimento', {'matricula': m, 'senha': s}),
+      assinar: (cred) => api.post('cautelas/${c['id']}/assinar-recebimento', cred),
     );
     if (r == null || !mounted) return;
     final cod = (r['assinatura'] as Map?)?['codigo'];

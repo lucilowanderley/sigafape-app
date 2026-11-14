@@ -123,7 +123,8 @@ http.Client clienteDemo() {
       };
 
   http.Response json(Object corpo, [int status = 200]) => http.Response(jsonEncode(corpo), status, headers: {'content-type': 'application/json; charset=utf-8'});
-  http.Response? assinaturaErrada(Map corpo) => corpo['senha'] == 'demo' && corpo['matricula'].toString().replaceAll(RegExp(r'\D'), '') == '2153478'
+  http.Response? assinaturaErrada(Map corpo) => (corpo['senha'] == 'demo' || (corpo['biometria'] is Map && corpo['biometria']['assinatura'] == 'assinatura-de-teste')) &&
+          corpo['matricula'].toString().replaceAll(RegExp(r'\D'), '') == '2153478'
       ? null
       : json({'message': 'Assinatura recusada.', 'errors': {'senha': ['Matrícula ou senha incorreta. Restam 4 tentativas.']}}, 422);
 
@@ -144,6 +145,19 @@ http.Client clienteDemo() {
     final caminho = req.url.path.split('/api/v1/').last;
     final corpo = req.body.isEmpty ? <String, dynamic>{} : jsonDecode(req.body) as Map<String, dynamic>;
     switch ((req.method, caminho)) {
+      // Digital/rosto (2026-11-14): qualquer chave; a "assinatura" de teste vale
+      case ('POST', 'biometria'):
+        if (corpo['senha'] != 'demo') return json({'message': 'Senha incorreta.', 'errors': {'senha': ['Senha incorreta.']}}, 422);
+        return json({'data': {'id': 77, 'aparelho': corpo['aparelho']}, 'message': 'Digital/rosto ligados neste aparelho.'}, 201);
+      case ('POST', 'biometria/desafio'):
+        return json({'desafio': 'desafio-de-teste', 'validade_segundos': 120});
+      case ('POST', 'biometria/77/testar'):
+        return json({'ok': true});
+      case ('DELETE', 'biometria/77'):
+        return json({'message': 'Digital/rosto desligados neste aparelho.'});
+      case ('POST', 'login/biometria'):
+        if (corpo['assinatura'] != 'assinatura-de-teste') return json({'message': 'A digital não foi confirmada.', 'errors': {'chave': ['A digital não foi confirmada.']}}, 422);
+        return json({'token': '1|demo', 'tipo': 'Bearer', 'expira_em': iso(hoje.add(const Duration(days: 30))), 'usuario': usuario}, 201);
       case ('POST', 'login'):
         if (corpo['senha'] != 'demo') return json({'message': 'Usuário ou senha inválidos.', 'errors': {'usuario': ['Usuário ou senha inválidos.']}}, 422);
         return json({'token': '1|demo', 'tipo': 'Bearer', 'expira_em': iso(hoje.add(const Duration(days: 30))), 'usuario': usuario}, 201);

@@ -145,6 +145,55 @@ class Nativo {
     }
   }
 
+  // ------------------------------------------------------------ digital/rosto (opção A, 2026-11-14)
+
+  /// Testes: situação e assinatura simuladas (sem canal nativo).
+  static String biometriaDeTeste = 'antigo';
+  static bool biometriaCancelaDeTeste = false;
+
+  /// "ok", "sem_cadastro", "sem_sensor" ou "antigo" (Android antes do 9 / iPhone por enquanto).
+  static Future<String> biometriaSituacao() async {
+    if (semCanal) return biometriaDeTeste;
+    try {
+      return await _canal.invokeMethod<String>('biometriaSituacao') ?? 'antigo';
+    } catch (_) {
+      return 'antigo';
+    }
+  }
+
+  /// Cria a chave no chip de segurança e devolve a pública (base64).
+  static Future<String> biometriaCriarChave() async {
+    if (semCanal) return 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEteste';
+    try {
+      return (await _canal.invokeMethod<String>('biometriaCriar'))!;
+    } on PlatformException catch (e) {
+      throw ErroLocal('Não foi possível preparar a digital neste aparelho (${e.message ?? e.code}).');
+    }
+  }
+
+  static Future<void> biometriaApagar() async {
+    if (semCanal) return;
+    try {
+      await _canal.invokeMethod('biometriaApagar');
+    } catch (_) {}
+  }
+
+  /// Pede a digital/rosto e assina [texto]. Devolve null se o policial cancelar ("Usar senha").
+  /// Lança [ErroLocal] em erro; código 'invalidada' quando cadastraram outra digital no celular.
+  static Future<String?> biometriaAssinar(String texto, {required String titulo, String subtitulo = ''}) async {
+    if (semCanal) return biometriaCancelaDeTeste ? null : 'assinatura-de-teste';
+    try {
+      return await _canal.invokeMethod<String>('biometriaAssinar', {'texto': texto, 'titulo': titulo, 'subtitulo': subtitulo});
+    } on PlatformException catch (e) {
+      if (e.code == 'cancelado') return null;
+      throw ErroBiometria(e.code, switch (e.code) {
+        'invalidada' => 'Uma digital nova foi cadastrada neste celular. Por segurança, ligue a digital de novo em Eu → Segurança.',
+        'sem_chave' => 'A digital não está ligada neste aparelho. Ligue em Eu → Segurança.',
+        _ => e.message ?? 'A digital não foi confirmada.',
+      });
+    }
+  }
+
   /// Abre um link no navegador (APK da versão nova do app). Devolve false se não conseguir.
   static Future<bool> abrirLink(String url) async {
     if (semCanal) return false;
@@ -212,3 +261,11 @@ class ErroLocal implements Exception {
   @override
   String toString() => mensagem;
 }
+
+/// Erro da digital/rosto: [codigo] 'invalidada' ou 'sem_chave' pede para ligar de novo.
+class ErroBiometria extends ErroLocal {
+  const ErroBiometria(this.codigo, super.mensagem);
+  final String codigo;
+  bool get religar => codigo == 'invalidada' || codigo == 'sem_chave';
+}
+

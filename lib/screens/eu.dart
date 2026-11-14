@@ -4,6 +4,7 @@ import '../api/api.dart';
 import '../sessao.dart';
 import '../tema.dart';
 import '../util/formato.dart';
+import '../util/nativo.dart';
 import '../widgets/comum.dart';
 import 'ficha.dart';
 import 'inspecoes.dart';
@@ -70,6 +71,8 @@ class TelaEu extends StatelessWidget {
             ]),
           ),
         ),
+        const TituloSecao('Segurança'),
+        const _CartaoDigital(),
         const TituloSecao('Conta'),
         Card(
           margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -83,7 +86,7 @@ class TelaEu extends StatelessWidget {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Sair do app?'),
-                    content: const Text('Você vai precisar do usuário (ou matrícula) e da senha para entrar de novo.'),
+                    content: Text(sessao.biometriaLigada ? 'Para entrar de novo, use a digital/rosto ou o usuário e a senha.' : 'Você vai precisar do usuário (ou matrícula) e da senha para entrar de novo.'),
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
                       TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sair')),
@@ -99,6 +102,147 @@ class TelaEu extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Text('SIGAFAPE · app do Operador de Campo · versão $versaoApp', textAlign: TextAlign.center, style: TextStyle(color: c.suave, fontSize: 12)),
         ),
+      ]),
+    );
+  }
+}
+
+/// Entrar e assinar com digital ou rosto (opção A, 2026-11-14). Ligar pede a senha uma vez; a chave fica
+/// no chip de segurança do celular e só o servidor guarda a parte pública.
+class _CartaoDigital extends StatefulWidget {
+  const _CartaoDigital();
+
+  @override
+  State<_CartaoDigital> createState() => _CartaoDigitalState();
+}
+
+class _CartaoDigitalState extends State<_CartaoDigital> {
+  String? _situacao;
+  bool _ocupado = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Nativo.biometriaSituacao().then((s) {
+      if (mounted) setState(() => _situacao = s);
+    });
+  }
+
+  String get _explicacao => switch (_situacao) {
+        'antigo' => 'Este celular tem Android anterior ao 9 e não permite.',
+        'sem_sensor' => 'Este celular não tem leitor de digital ou rosto seguro.',
+        'sem_cadastro' => 'Cadastre uma digital (ou o rosto) nas configurações do celular e volte aqui.',
+        _ => 'Use a digital (ou o rosto, se o celular permitir) para entrar e para assinar com a sua matrícula. A senha continua valendo.',
+      };
+
+  Future<void> _alternar(bool ligar) async {
+    final sessao = Escopo.ler(context);
+    if (!ligar) {
+      setState(() => _ocupado = true);
+      await sessao.desligarBiometria();
+      if (!mounted) return;
+      setState(() => _ocupado = false);
+      aviso(context, 'Digital/rosto desligados neste aparelho.');
+      return;
+    }
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Cores.de(context).cartao,
+      builder: (_) => const _JanelaLigarDigital(),
+    );
+    if (ok == true && mounted) aviso(context, 'Pronto: digital/rosto ligados. Já pode entrar e assinar com eles.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Cores.de(context);
+    final sessao = Escopo.de(context);
+    final pode = _situacao == 'ok';
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      child: SwitchListTile(
+        key: const Key('chave-digital'),
+        secondary: Icon(Icons.fingerprint, color: c.destaque, size: 30),
+        title: const Text('Entrar e assinar com digital ou rosto', style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(sessao.biometriaLigada ? 'Ligado neste aparelho. Trocar a senha desliga.' : _explicacao),
+        value: sessao.biometriaLigada,
+        onChanged: _ocupado || (!pode && !sessao.biometriaLigada) ? null : _alternar,
+      ),
+    );
+  }
+}
+
+class _JanelaLigarDigital extends StatefulWidget {
+  const _JanelaLigarDigital();
+
+  @override
+  State<_JanelaLigarDigital> createState() => _JanelaLigarDigitalState();
+}
+
+class _JanelaLigarDigitalState extends State<_JanelaLigarDigital> {
+  final _senha = TextEditingController();
+  bool _enviando = false, _ver = false;
+  String? _erro;
+
+  @override
+  void dispose() {
+    _senha.dispose();
+    super.dispose();
+  }
+
+  Future<void> _ligar() async {
+    if (_senha.text.isEmpty) {
+      setState(() => _erro = 'Informe sua senha.');
+      return;
+    }
+    setState(() { _enviando = true; _erro = null; });
+    try {
+      await Escopo.ler(context).ligarBiometria(_senha.text);
+      if (mounted) Navigator.pop(context, true);
+    } on ApiErro catch (e) {
+      if (mounted) setState(() { _enviando = false; _erro = e.detalhe; });
+    } on ErroLocal catch (e) {
+      if (mounted) setState(() { _enviando = false; _erro = e.mensagem; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Cores.de(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('Ligar digital ou rosto', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 6),
+        Text('Confirme sua senha. Depois o celular pede a digital (ou o rosto) uma vez para testar. A senha não fica guardada no celular.',
+            style: TextStyle(color: c.suave, fontSize: 14)),
+        const SizedBox(height: 16),
+        TextField(
+          key: const Key('senha-digital'),
+          controller: _senha,
+          enabled: !_enviando,
+          obscureText: !_ver,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: 'Senha',
+            errorText: _erro,
+            errorMaxLines: 3,
+            suffixIcon: IconButton(icon: Icon(_ver ? Icons.visibility_off : Icons.visibility), onPressed: () => setState(() => _ver = !_ver)),
+          ),
+          onSubmitted: (_) => _ligar(),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          key: const Key('ligar-digital'),
+          onPressed: _enviando ? null : _ligar,
+          icon: _enviando ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.fingerprint),
+          label: const Text('LIGAR'),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton(onPressed: _enviando ? null : () => Navigator.pop(context, false), child: const Text('Cancelar')),
       ]),
     );
   }

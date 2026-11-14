@@ -7,7 +7,7 @@ import 'api/api.dart';
 import 'tema.dart';
 import 'util/nativo.dart';
 
-const versaoApp = '1.4.4';
+const versaoApp = '1.4.5';
 
 /// Endereço padrão do sistema; pode vir na compilação: --dart-define=SERVIDOR=https://...
 const servidorPadrao = String.fromEnvironment('SERVIDOR', defaultValue: bool.fromEnvironment('DEMO') ? 'https://demonstracao.sigafape' : '');
@@ -50,6 +50,7 @@ class Sessao extends ChangeNotifier {
   Future<void> iniciar() async {
     await Api.prepararCertificados();
     tema = Tema.porNome(await Nativo.ler('tema'));
+    await _carregarBiometria();
     await _carregarServidores();
     api.token = await Nativo.lerSegredo('token');
     if (servidores.isEmpty) {
@@ -93,12 +94,116 @@ class Sessao extends ChangeNotifier {
       if (e.status == 0 && procurar && await procurarServidor()) return entrar(usuarioOuMatricula, senha, procurar: false);
       rethrow;
     }
+    await _concluirLogin(r);
+    // Outro policial entrou com senha neste celular: a digital ligada era de quem saiu
+    if (biometriaLigada && bioNome != usuario?['nome']?.toString()) await _esquecerBiometria();
+  }
+
+  Future<void> _concluirLogin(Map<String, dynamic> r) async {
     api.token = r['token'] as String;
     usuario = r['usuario'] as Map<String, dynamic>;
     await Nativo.gravarSegredo('token', api.token);
     await _guardarUsuario();
     avisoSaida = null;
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------- digital/rosto (opção A, 2026-11-14)
+  // O celular guarda só o número da chave e quem ligou (para a tela de entrar). A senha nunca fica no aparelho.
+
+  int? bioChave;
+  String? bioNome, bioMatricula;
+  bool get biometriaLigada => bioChave != null;
+
+  Future<void> _carregarBiometria() async {
+    bioChave = int.tryParse(await Nativo.ler('bio_chave') ?? '');
+    bioNome = await Nativo.ler('bio_nome');
+    bioMatricula = await Nativo.ler('bio_matricula');
+  }
+
+  Future<void> _esquecerBiometria() async {
+    await Nativo.biometriaApagar();
+    for (final k in ['bio_chave', 'bio_nome', 'bio_matricula']) {
+      await Nativo.gravar(k, null);
+    }
+    bioChave = null;
+    bioNome = bioMatricula = null;
+    notifyListeners();
+  }
+
+  String get _plataforma => defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+
+  /// Liga neste aparelho: cria a chave, manda a pública com a senha e faz um teste com a digital.
+  Future<void> ligarBiometria(String senha) async {
+    final publica = await Nativo.biometriaCriarChave();
+    final Map<String, dynamic> r;
+    try {
+      r = await api.post('biometria', {'senha': senha, 'chave_publica': publica, 'aparelho': await Nativo.aparelho(), 'plataforma': _plataforma, if (bioChave != null) 'substitui': bioChave});
+    } catch (_) {
+      await Nativo.biometriaApagar();
+      rethrow;
+    }
+    final id = ((r['data'] as Map)['id'] as num).toInt();
+    try {
+      final d = await api.post('biometria/desafio', {'chave': id});
+      final assinatura = await Nativo.biometriaAssinar('sigafape:${d['desafio']}', titulo: 'Ligar a digital', subtitulo: 'Confirme com a digital ou o rosto');
+      if (assinatura == null) throw const ErroLocal('Ligação cancelada.');
+      await api.post('biometria/$id/testar', {'desafio': d['desafio'], 'assinatura': assinatura});
+    } catch (_) {
+      try {
+        await api.delete('biometria/$id');
+      } catch (_) {}
+      await Nativo.biometriaApagar();
+      rethrow;
+    }
+    bioChave = id;
+    bioNome = usuario?['nome']?.toString();
+    bioMatricula = policial?['matricula']?.toString();
+    await Nativo.gravar('bio_chave', '$id');
+    await Nativo.gravar('bio_nome', bioNome);
+    await Nativo.gravar('bio_matricula', bioMatricula);
+    notifyListeners();
+  }
+
+  Future<void> desligarBiometria() async {
+    final id = bioChave;
+    if (id != null) {
+      try {
+        await api.delete('biometria/$id');
+      } catch (_) {}
+    }
+    await _esquecerBiometria();
+  }
+
+  /// Desafio do servidor assinado depois da digital: {chave, desafio, assinatura}, ou null se cancelar ("Usar senha").
+  Future<Map<String, dynamic>?> provaBiometrica(String titulo, {String subtitulo = ''}) async {
+    final id = bioChave;
+    if (id == null) return null;
+    final d = await api.post('biometria/desafio', {'chave': id});
+    try {
+      final assinatura = await Nativo.biometriaAssinar('sigafape:${d['desafio']}', titulo: titulo, subtitulo: subtitulo);
+      if (assinatura == null) return null;
+      return {'chave': id, 'desafio': d['desafio'], 'assinatura': assinatura};
+    } on ErroBiometria catch (e) {
+      if (e.religar) await _esquecerBiometria();
+      rethrow;
+    }
+  }
+
+  /// Entrar pela digital/rosto. Devolve false se o policial cancelar.
+  Future<bool> entrarComDigital() async {
+    api.token = null;
+    final prova = await provaBiometrica('Entrar no SIGAFAPE', subtitulo: bioNome ?? '');
+    if (prova == null) return false;
+    try {
+      final r = await api.post('login/biometria', {...prova, 'aparelho': await Nativo.aparelho(), 'plataforma': _plataforma, 'versao_app': versaoApp});
+      await _concluirLogin(r);
+      return true;
+    } on ApiErro catch (e) {
+      // Chave desligada no servidor (senha trocada, administrador, outro aparelho): volta para a senha
+      if (e.status == 422) await _esquecerBiometria();
+      rethrow;
+    }
   }
 
   // ---------------------------------------------------------------- servidores

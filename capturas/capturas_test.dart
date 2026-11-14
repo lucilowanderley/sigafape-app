@@ -216,5 +216,36 @@ void main() {
     versaoNovaDeTeste = null;
     nomeDemo = 'CB JOÃO BATISTA';
   });
-}
 
+  testWidgets('digital e rosto 1.4.5', (tester) async {
+    celular(tester);
+    Nativo.biometriaDeTeste = 'ok';
+    final sessao = await abrirApp(tester);
+    await entrar(tester);
+    await aba(tester, 'Eu');
+    await tester.scrollUntilVisible(find.byKey(const Key('chave-digital')), 200, scrollable: find.byType(Scrollable).last);
+    await foto(tester, 'v145-1-eu-seguranca');
+    await tester.tap(find.byKey(const Key('chave-digital')));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v145-2-ligar');
+    await tester.enterText(find.byKey(const Key('senha-digital')), 'demo');
+    await tester.tap(find.byKey(const Key('ligar-digital')));
+    await esperar(tester);
+    await esperar(tester);
+    await tester.pump(const Duration(seconds: 6));
+    await aba(tester, 'Alertas');
+    await tester.tap(find.text('Escala extra do feriado'));
+    await esperar(tester);
+    await tester.tap(find.text('DAR CIÊNCIA ASSINADA'));
+    await tester.pumpAndSettle();
+    await foto(tester, 'v145-3-assinar');
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    await tester.runAsync(sessao.sair);
+    await esperar(tester);
+    await foto(tester, 'v145-4-entrar');
+    Nativo.biometriaDeTeste = 'antigo';
+  });
+}
