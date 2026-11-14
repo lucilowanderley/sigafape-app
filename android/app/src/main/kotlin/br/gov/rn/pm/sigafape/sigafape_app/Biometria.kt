@@ -99,7 +99,7 @@ object Biometria {
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     try {
-                        val s = result.cryptoObject.signature
+                        val s = result.cryptoObject?.signature ?: assinatura
                         s.update(texto.toByteArray(Charsets.UTF_8))
                         responder(Base64.encodeToString(s.sign(), Base64.NO_WRAP), null)
                     } catch (e: Exception) {
