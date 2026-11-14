@@ -193,6 +193,11 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "ultimoErro" -> result.success(App.ultimoErro(this))
+                    // Aviso de versão nova do app: abre o link do APK no navegador
+                    "abrirLink" -> {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(call.argument<String>("url")!!)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        result.success(true)
+                    }
                     "abrirPedido" -> {
                         result.success(abrirPedido)
                         abrirPedido = null

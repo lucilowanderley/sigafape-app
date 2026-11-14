@@ -38,13 +38,13 @@ object Avisos {
 
     /** Mostra um aviso. [chave] fixa (ex.: "alerta-12") evita aviso repetido do mesmo item. */
     @Suppress("MissingPermission")
-    fun mostrar(ctx: Context, chave: String, titulo: String, texto: String, prioridade: String?) {
+    fun mostrar(ctx: Context, chave: String, titulo: String, texto: String, prioridade: String?, abrirEm: String = "alertas") {
         if (!permitido(ctx)) return
         criarCanais(ctx)
         val urgente = prioridade == "urgente" || prioridade == "urgentissima" || prioridade == "atencao"
         val abrir = Intent(ctx, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(EXTRA_ABRIR, "alertas")
+            putExtra(EXTRA_ABRIR, abrirEm)
         }
         val pi = PendingIntent.getActivity(ctx, chave.hashCode(), abrir, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val n = NotificationCompat.Builder(ctx, if (urgente) CANAL_URGENTE else CANAL)

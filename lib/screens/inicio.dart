@@ -103,7 +103,10 @@ class _TelaInicioState extends State<TelaInicio> with WidgetsBindingObserver {
 
   /// Tocou num aviso da barra do Android: abre a aba Alertas.
   Future<void> _abrirPedido() async {
-    if (await Nativo.abrirPedido() == 'alertas' && mounted) _irPara(3);
+    final pedido = await Nativo.abrirPedido();
+    if (!mounted) return;
+    if (pedido == 'alertas') _irPara(3);
+    if (pedido == 'inicio') _irPara(0); // aviso de versão nova do app: faixa no Início
   }
 
   void _irPara(int aba) => setState(() => _aba = aba);

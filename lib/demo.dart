@@ -10,6 +10,12 @@ const modoDemo = bool.fromEnvironment('DEMO');
 /// Itens extras de /novidades (testes: "chegou uma notificação nova").
 final novidadesDeTeste = <Map<String, dynamic>>[];
 
+/// Nome do policial na demonstração (testes e prints do cartão do Início com nome longo).
+String nomeDemo = 'CB JOÃO BATISTA';
+
+/// Versão nova do app que a demonstração anuncia em /app/versao (testes e prints da faixa). null = em dia.
+String? versaoNovaDeTeste;
+
 /// Endereços que a demonstração trata como fora do ar (testes e prints da tela Sem conexão).
 final hostsForaDoAr = <String>{};
 
@@ -77,7 +83,7 @@ http.Client clienteDemo() {
   final usuario = {
     'id': 7, 'usuario': 'joao', 'nome': 'CB JOÃO BATISTA', 'perfil': 'Operador de Módulo', 'funcao': 'Operador de Campo', 'unidade': '8º BPM',
     'iniciais': 'JB', 'foto': 'https://demonstracao.sigafape/api/v1/foto?v=demo1', 'trocar_senha': false, 'vinculado': true,
-    'policial': {'id': 31, 'nome': 'CB JOÃO BATISTA', 'nome_completo': 'JOÃO BATISTA DA SILVA', 'matricula': '215.347-8', 'unidade': '8º BPM · 1ª CIA', 'situacao': 'Pronto', 'de_outra_unidade': null},
+    'policial': {'id': 31, 'nome': nomeDemo, 'nome_completo': 'JOÃO BATISTA DA SILVA', 'matricula': '215.347-8', 'unidade': '8º BPM · 1ª CIA', 'situacao': 'Pronto', 'de_outra_unidade': null},
   };
 
   Map<String, dynamic> cautela(int id, String material, String serie, {String status = 'aberta', bool urgente = false, bool permanente = false, String? categoria}) => {
@@ -210,6 +216,27 @@ http.Client clienteDemo() {
         return json({'ativo': true, 'intervalo_minutos': 5, 'pedido': false});
       case ('POST', 'posicao'):
         return json({'ativo': true, 'intervalo_minutos': 5, 'pedido': false, 'message': 'Posição recebida.'});
+      case ('GET', 'app/versao'):
+        final nova = versaoNovaDeTeste;
+        return json({
+          'versao': nova,
+          'data': iso(hoje).substring(0, 10),
+          'nova': nova != null,
+          'mudancas': nova == null
+              ? []
+              : [
+                  {
+                    'versao': nova,
+                    'data': iso(hoje).substring(0, 10),
+                    'itens': [
+                      {'tipo': 'Novidade', 'modulo': '', 'titulo': 'Aviso de versão nova do app: faixa no Início, o que mudou e botão para baixar'},
+                      {'tipo': 'Melhoria', 'modulo': 'Início', 'titulo': 'Nome no cartão em até 2 linhas'},
+                      {'tipo': 'Melhoria', 'modulo': 'Apoio urgente', 'titulo': 'Botão com ícone de sirene'},
+                    ],
+                  }
+                ],
+          'apk_url': 'https://github.com/lucilowanderley/sigafape-app/releases/latest/download/sigafape-operador-de-campo.apk',
+        });
       case ('GET', 'novidades'):
         final itens = [
           if (alertaPendente) {'chave': 'alerta-55', 'tipo': 'alerta', 'titulo': 'URGENTE · Escala extra do feriado', 'texto': 'De P/1 · 8º BPM · ciência assinada', 'prioridade': 'urgente', 'em': iso(hoje)},

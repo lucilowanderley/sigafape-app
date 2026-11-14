@@ -145,6 +145,16 @@ class Nativo {
     }
   }
 
+  /// Abre um link no navegador (APK da versão nova do app). Devolve false se não conseguir.
+  static Future<bool> abrirLink(String url) async {
+    if (semCanal) return false;
+    try {
+      return await _canal.invokeMethod<bool>('abrirLink', {'url': url}) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Motivo da última vez que o app fechou por erro (guardado pelo Android; apaga depois de ler).
   static Future<String?> ultimoErro() async {
     if (semCanal) return null;

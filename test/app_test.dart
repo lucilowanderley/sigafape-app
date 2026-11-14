@@ -413,4 +413,34 @@ void main() {
     expect(find.text('Assinatura não encontrada'), findsOneWidget);
     Nativo.qrDeTeste = null;
   });
+
+  testWidgets('versão nova do app: faixa no Início e tela do que mudou', (tester) async {
+    versaoNovaDeTeste = '9.9.9';
+    await abrirApp(tester);
+    await entrar(tester);
+    expect(find.text('Versão 9.9.9 disponível'), findsOneWidget);
+    await tester.tap(find.text('Atualizar'));
+    await esperar(tester);
+    expect(find.text('Baixar e instalar'), findsOneWidget);
+    expect(find.textContaining('Botão com ícone de sirene'), findsOneWidget);
+    await tester.tap(find.text('Agora não'));
+    await esperar(tester);
+    expect(find.byKey(const Key('faixa-versao')), findsOneWidget);
+    versaoNovaDeTeste = null;
+  });
+
+  testWidgets('sem versão nova não mostra a faixa; nome longo cabe em 2 linhas', (tester) async {
+    nomeDemo = '3º SGT LUCILO WANDERLEY SILVA COSTA';
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    await abrirApp(tester);
+    await entrar(tester);
+    expect(find.byKey(const Key('faixa-versao')), findsNothing);
+    final nome = tester.widget<Text>(find.byKey(const Key('nome-cartao')));
+    expect(nome.style!.fontSize!, lessThan(19));
+    expect(find.text('3º SGT LUCILO WANDERLEY SILVA COSTA'), findsOneWidget);
+    nomeDemo = 'CB JOÃO BATISTA';
+  });
 }
+

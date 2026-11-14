@@ -4,7 +4,10 @@ import '../api/api.dart';
 import '../tema.dart';
 import '../util/formato.dart';
 import '../widgets/comum.dart';
+import '../sessao.dart';
+import '../widgets/sirene.dart';
 import 'alertas.dart';
+import 'atualizacao.dart';
 import 'caderno.dart';
 import 'cautela.dart';
 import 'conferir.dart';
@@ -35,12 +38,22 @@ class _TelaPainelState extends State<TelaPainel> {
     final r = await api.get('painel');
     widget.aoAtualizar();
     final d = Map<String, dynamic>.from(r['data'] as Map<String, dynamic>);
-    // Minhas ocorrências (servidor antigo sem a rota: o cartão fica sem número)
-    try {
-      final o = await api.get('ocorrencias');
+    // Minhas ocorrências e versão nova do app, ao mesmo tempo (servidor antigo sem a rota: fica sem)
+    Future<Map<String, dynamic>?> talvez(String caminho, [Map<String, dynamic>? q]) async {
+      try {
+        return await api.get(caminho, q);
+      } on ApiErro catch (_) {
+        return null;
+      }
+    }
+
+    final r2 = await Future.wait([talvez('ocorrencias'), talvez('app/versao', {'atual': versaoApp})]);
+    final o = r2[0];
+    if (o != null) {
       d['_ocorrencias'] = o['data'];
       d['_naturezas'] = o['naturezas'];
-    } on ApiErro catch (_) {}
+    }
+    if (r2[1]?['nova'] == true) d['_versao'] = r2[1];
     await sessao.carregarFoto();
     return d;
   }
@@ -92,6 +105,7 @@ class _TelaPainelState extends State<TelaPainel> {
       return ListView(
         children: [
           _Heroi(usuario: usuario, policial: null),
+          if (d['_versao'] is Map) FaixaVersao(dados: Map<String, dynamic>.from(d['_versao'] as Map)),
           const Vazio('Sua conta ainda não está vinculada a um cadastro do Efetivo policial. Procure o RH ou o administrador do sistema.', icone: Icons.link_off),
         ],
       );
@@ -213,6 +227,7 @@ class _TelaPainelState extends State<TelaPainel> {
       padding: const EdgeInsets.only(bottom: 16),
       children: [
         _Heroi(usuario: usuario, policial: pol),
+        if (d['_versao'] is Map) FaixaVersao(dados: Map<String, dynamic>.from(d['_versao'] as Map)),
         if (viatura != null)
           Cartao(
             bordaEsquerda: const Color(0xFF7A5BD0),
@@ -303,10 +318,7 @@ class _Heroi extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(saudacao(), style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                    Text(
-                      nome.toString(),
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 19),
-                    ),
+                    _NomeAjustado(nome.toString()),
                     if (policial != null) Text('Mat. ${policial!['matricula'] ?? '—'} · ${policial!['unidade'] ?? ''}', style: const TextStyle(color: Colors.white70, fontSize: 12.5)),
                     const SizedBox(height: 6),
                     Wrap(
@@ -321,7 +333,7 @@ class _Heroi extends StatelessWidget {
                 ),
               ),
               // Espaço para o ícone de apoio no canto inferior direito
-              if (policial != null) const SizedBox(width: 30),
+              if (policial != null) const SizedBox(width: 40),
             ],
           ),
         ),
@@ -340,7 +352,7 @@ class _Heroi extends StatelessWidget {
                   message: 'Pedir apoio urgente',
                   child: Padding(
                     padding: EdgeInsets.all(9),
-                    child: Icon(Icons.campaign, color: Colors.white, size: 24),
+                    child: IconeSirene(tamanho: 24),
                   ),
                 ),
               ),
@@ -537,3 +549,28 @@ class _TelaAssinaturasState extends State<TelaAssinaturas> {
     );
   }
 }
+
+/// Nome no cartão do Início: no máximo 2 linhas; a fonte diminui (de 19 até 12) até caber.
+class _NomeAjustado extends StatelessWidget {
+  const _NomeAjustado(this.nome);
+  final String nome;
+
+  static const _maior = 19.0;
+  static const _menor = 12.0;
+
+  static TextStyle _estilo(double t) => TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: t, height: 1.15);
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, limite) {
+        final escala = MediaQuery.textScalerOf(context);
+        var t = _maior;
+        while (t > _menor) {
+          final p = TextPainter(text: TextSpan(text: nome, style: _estilo(t)), maxLines: 2, textDirection: TextDirection.ltr, textScaler: escala)
+            ..layout(maxWidth: limite.maxWidth);
+          if (!p.didExceedMaxLines) break;
+          t -= 0.5;
+        }
+        return Text(nome, key: const Key('nome-cartao'), style: _estilo(t), maxLines: 2, overflow: TextOverflow.ellipsis);
+      });
+}
+

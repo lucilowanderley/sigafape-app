@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sigafape_app/demo.dart';
 import 'package:sigafape_app/tema.dart';
 import 'package:sigafape_app/util/nativo.dart';
 
@@ -201,4 +202,19 @@ void main() {
     await esperar(tester);
     await foto(tester, 'v14-4-minhas');
   });
+
+  testWidgets('versao nova, nome e sirene 1.4.4', (tester) async {
+    celular(tester);
+    versaoNovaDeTeste = '1.4.4';
+    nomeDemo = '3º SGT LUCILO WANDERLEY SILVA COSTA';
+    await abrirApp(tester);
+    await entrar(tester);
+    await foto(tester, 'v144-1-inicio');
+    await tester.tap(find.text('Atualizar'));
+    await esperar(tester);
+    await foto(tester, 'v144-2-atualizar');
+    versaoNovaDeTeste = null;
+    nomeDemo = 'CB JOÃO BATISTA';
+  });
 }
+
